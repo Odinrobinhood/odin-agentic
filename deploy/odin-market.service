@@ -1,0 +1,31 @@
+[Unit]
+Description=Odin Agentic market data (token registry, routing, minute snapshots)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=odin
+Group=odin
+EnvironmentFile=/etc/odin/chain.env
+WorkingDirectory=/opt/odin/app
+ExecStart=/usr/bin/node packages/market/src/main.ts
+Restart=on-failure
+RestartSec=5
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+CapabilityBoundingSet=
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

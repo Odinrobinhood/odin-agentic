@@ -61,3 +61,11 @@ systemctl enable odin-signer >/dev/null 2>&1
 systemctl restart odin-signer
 sleep 3
 systemctl --no-pager --lines=8 status odin-signer || true
+
+# --- market data service -------------------------------------------------------------------------
+install -m 0644 "$APP/deploy/odin-market.service" /etc/systemd/system/odin-market.service
+systemctl daemon-reload
+systemctl enable odin-market >/dev/null 2>&1
+systemctl restart odin-market
+sleep 5
+systemctl --no-pager --lines=4 status odin-market || true

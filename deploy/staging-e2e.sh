@@ -69,6 +69,15 @@ psql_su -d odin -c "SELECT channel, kind, count(*) FROM signer_signatures WHERE 
 echo "-- signer DB role cannot write policy tables:"
 sudo -u odin-signer psql -d odin -U odin_signer -qtAX -c "UPDATE agents SET status='active'" 2>&1 | head -1 || true  # expected to fail
 
+echo "== market data: registry + routes + snapshots (real Robinhood Chain pools)"
+CHAINENV=$(grep -v '^#' /etc/odin/chain.env | xargs)
+echo "-- not a token (chain_read_failed):"
+(cd "$APP" && sudo -u odin env $CHAINENV node packages/market/scripts/add-token.ts 0x000000000000000000000000000000000000dead || true)
+echo "-- routes:"
+psql_su -d odin -c "SELECT t.symbol, q.symbol, r.path FROM routes r JOIN tokens t ON t.address=r.token_address JOIN tokens q ON q.address=r.quote_address ORDER BY 1"
+echo "-- latest snapshots (USDG per token):"
+psql_su -d odin -c "SELECT ts, t.symbol, round(price::numeric, 4), fee_tier FROM market_snapshots s JOIN tokens t ON t.address=s.token_address ORDER BY ts DESC LIMIT 3"
+
 echo "== executor: signer -> real mainnet RPC broadcast from the unfunded staging wallet (must be refused: insufficient_gas)"
 (cd "$APP" && sudo -u odin env $(grep -v '^#' /etc/odin/chain.env | xargs) STAGING_AGENT_ID="$AGENT" \
   node packages/executor/scripts/staging-check.ts)
