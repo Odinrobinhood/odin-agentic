@@ -76,6 +76,18 @@ systemctl restart odin-market
 sleep 5
 systemctl --no-pager --lines=4 status odin-market || true
 
+# --- API (OS user odin; JWT key readable by odin only) ---------------------------------------------
+JWTKEY=/etc/odin/secrets/api-jwt.key
+[ -f "$JWTKEY" ] || head -c 64 /dev/urandom > "$JWTKEY"
+chown root:odin "$JWTKEY" && chmod 0440 "$JWTKEY"
+install -m 0644 "$APP/deploy/api.staging.env" /etc/odin/api.env
+install -m 0644 "$APP/deploy/odin-api.service" /etc/systemd/system/odin-api.service
+systemctl daemon-reload
+systemctl enable odin-api >/dev/null 2>&1
+systemctl restart odin-api
+sleep 3
+systemctl --no-pager --lines=3 status odin-api || true
+
 # --- guard watcher (OS user odin-guard: guard channel token + odin_guard DB role) ----------------
 install -m 0644 "$APP/deploy/odin-guard.service" /etc/systemd/system/odin-guard.service
 systemctl daemon-reload

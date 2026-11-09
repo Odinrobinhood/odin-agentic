@@ -1,0 +1,19 @@
+{
+  "name": "@odin/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "start": "node src/main.ts" },
+  "dependencies": {
+    "@odin/db": "workspace:*",
+    "@odin/market": "workspace:*",
+    "@odin/runtime": "workspace:*",
+    "@odin/shared": "workspace:*",
+    "fastify": "5.12.7",
+    "jose": "6.2.13",
+    "pg": "8.13.1",
+    "viem": "2.21.54",
+    "zod": "3.23.8"
+  }
+}
