@@ -82,10 +82,14 @@ echo "== runtime: paper ticks with a scripted decision provider (real risk engin
 (cd "$APP" && sudo -u odin env $(grep -v '^#' /etc/odin/chain.env | xargs) STAGING_AGENT_ID="$AGENT" \
   node packages/runtime/scripts/staging-tick.ts)
 
-echo "== guard watcher (as odin-guard): stop loss fires on the paper position at the real realizable price"
+echo "== guard watcher (as odin-guard): stop loss fires at the real realizable price, even after WETH was removed from the agent assets"
 systemctl stop odin-guard  # avoid racing the running watcher
+# held-token exit (user decision): remove WETH from the agent's assets while the paper position is open;
+# the stop loss must still fire. Restored below.
+psql_su -d odin -c "DELETE FROM agent_assets WHERE agent_id = '$AGENT' AND token_address = '$WETH'"
 (cd "$APP" && sudo -u odin-guard env $(grep -v '^#' /etc/odin/chain.env | xargs) STAGING_AGENT_ID="$AGENT" \
   node packages/guard/scripts/staging-guard.ts)
+psql_su -d odin -c "INSERT INTO agent_assets (agent_id, token_address) VALUES ('$AGENT', '$WETH') ON CONFLICT DO NOTHING"
 systemctl start odin-guard
 echo "-- isolation: odin cannot read the guard token, odin-guard cannot read the agent token:"
 sudo -u odin cat /etc/odin/secrets/signer-guard.token >/dev/null 2>&1 && echo "FAIL odin read guard token" || echo "ok"
