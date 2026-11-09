@@ -9,6 +9,8 @@ export type AgentPolicy = {
   quoteAsset: Address;
   assets: Set<Address>;
   stockTokens: Set<Address>;
+  /** Tokens with an open live position (qty > 0), excluding the quote asset. May include tokens removed from `assets`. */
+  heldTokens: Set<Address>;
   openLivePositions: number;
 };
 
@@ -49,9 +51,10 @@ export class PgPolicyStore implements PolicyStore {
       [agentId],
     );
     const quote = await this.pool.query<{ is_stock_token: boolean }>('SELECT is_stock_token FROM tokens WHERE address = $1', [row.quote_asset]);
-    const positions = await this.pool.query<{ n: string }>(
-      `SELECT count(*) AS n FROM positions WHERE agent_id = $1 AND mode = 'live' AND qty > 0`,
-      [agentId],
+    const held = await this.pool.query<{ token_address: string; is_stock_token: boolean }>(
+      `SELECT p.token_address, t.is_stock_token FROM positions p JOIN tokens t ON t.address = p.token_address
+        WHERE p.agent_id = $1 AND p.mode = 'live' AND p.qty > 0 AND p.token_address <> $2`,
+      [agentId, row.quote_asset],
     );
 
     const stockTokens = new Set<Address>();
@@ -63,6 +66,12 @@ export class PgPolicyStore implements PolicyStore {
     }
     const quoteAsset = getAddress(row.quote_asset);
     if (quote.rows[0]?.is_stock_token) stockTokens.add(quoteAsset);
+    const heldTokens = new Set<Address>();
+    for (const h of held.rows) {
+      const addr = getAddress(h.token_address);
+      heldTokens.add(addr);
+      if (h.is_stock_token) stockTokens.add(addr);
+    }
 
     return {
       agentId,
@@ -72,7 +81,8 @@ export class PgPolicyStore implements PolicyStore {
       quoteAsset,
       assets: assetSet,
       stockTokens,
-      openLivePositions: Number(positions.rows[0]?.n ?? 0),
+      heldTokens,
+      openLivePositions: heldTokens.size,
     };
   }
 }

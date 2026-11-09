@@ -159,6 +159,17 @@ describe('GuardWatcher', () => {
     expect(store.cleared).toEqual(['sl']);
   });
 
+  it('exits a held token that is no longer an agent asset, booking it with its own decimals', async () => {
+    const GONE = addr(0x4004);
+    quoteOut = 1n; // far below the stop
+    store.positions = [position({ token: GONE, tokenDecimals: 9, qty: 10n ** 9n })];
+    riskResult = { ...(riskResult as Extract<RiskResult, { ok: true }>), tokenIn: GONE };
+    const [e] = await watcher.checkOnce();
+    expect(e).toMatchObject({ kind: 'fired', guardId: 'sl' });
+    expect(intents[0]).toMatchObject({ token: GONE, action: 'sell', origin: 'guard' });
+    expect(fills[0]!.agent.assets.find((a) => a.address === GONE)).toMatchObject({ decimals: 9 });
+  });
+
   it('reports an unpriceable position without firing', async () => {
     quoteOut = 0n;
     store.positions = [position()];

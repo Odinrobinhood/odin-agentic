@@ -120,7 +120,10 @@ export class Signer {
     const first = tokens[0]!;
     const last = tokens[tokens.length - 1]!;
     const endpointAllowed = (t: Address) => p.assets.has(t) || t === p.quoteAsset;
-    if (!endpointAllowed(first) || !endpointAllowed(last)) {
+    // An exit of a token the agent still holds is allowed even after the user removed it from the assets
+    // (otherwise its TP/SL could never fire): only as a sell straight into the quote asset.
+    const heldExit = p.heldTokens.has(first) && last === p.quoteAsset;
+    if (!heldExit && (!endpointAllowed(first) || !endpointAllowed(last))) {
       throw new Rejection('token_not_allowed', 'path endpoints must be the agent assets or its quote asset');
     }
     for (const mid of tokens.slice(1, -1)) {
@@ -128,8 +131,8 @@ export class Signer {
         throw new Rejection('intermediate_not_allowed', `intermediate ${mid} is not USDG or WETH`);
       }
     }
-    if (channel === 'guard' && (last !== p.quoteAsset || !p.assets.has(first))) {
-      throw new Rejection('guard_must_sell_to_quote', 'guard exits must sell an agent asset into the quote asset');
+    if (channel === 'guard' && (last !== p.quoteAsset || !(p.assets.has(first) || p.heldTokens.has(first)))) {
+      throw new Rejection('guard_must_sell_to_quote', 'guard exits must sell an agent asset or held token into the quote asset');
     }
     if (amountIn >= UNLIMITED_APPROVAL_THRESHOLD) throw new Rejection('approval_too_large', 'amount is at or above 2^255');
 

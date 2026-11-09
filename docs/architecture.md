@@ -163,6 +163,7 @@ Every rejection has a `code` (e.g. `exceeds_position_limit`, `token_paused`, `pr
 - **Path validation** (the signer decodes `path` and checks it independently of the Risk Engine):
   - 1–3 hops; every fee tier is a valid Uniswap v3 tier.
   - The first token is the token being sold and the last is the token being bought; one of them is in the agent's `assets` and the other is the agent's `quote_asset` or another asset of the agent.
+  - **Held-token exit:** a token the agent still holds (open live position) but the user has removed from `assets` may only be sold straight into the `quote_asset` — never bought, never swapped into anything else — so its TP/SL and "close all positions" keep working. Stock Token checks still apply.
   - Intermediate tokens may only be USDG or WETH (pinned addresses in signer config).
   - Every hop's pool is resolved by the signer itself from the pinned factory (`getPool(tokenIn, tokenOut, fee)`) and must exist with non-zero liquidity — no pool can be named directly.
   - Every chain read the signer depends on fails closed (`chain_read_failed`).
@@ -182,6 +183,7 @@ Every rejection has a `code` (e.g. `exceeds_position_limit`, `token_paused`, `pr
   - a default level per agent, overridable per position;
   - editable or removable at any time from the dashboard.
 - The AI cannot change TP/SL set by the user.
+- Removing a token from the agent's assets does not strand an open position: guard and user-close exits of a held token remain allowed (risk check 1 and the signer's held-token exit rule), as a sell into the quote asset only.
 - Monitors positions with active stop loss / take profit against the **realizable** price (pool fee included), not the mid price.
 - When triggered → creates a `sell` intent through the same Risk Engine & Signer (no bypass path), marked as guard-originated so agent-only limits (§3.7 check 3, the signer's agent signature cap) cannot block it. Signer path, spender and recipient checks still apply in full.
 - If a guard sell cannot execute (paused token, price deviation, RPC failure), the guard stays `armed`, retries, and the user is notified on every failed attempt.

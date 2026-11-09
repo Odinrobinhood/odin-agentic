@@ -108,7 +108,11 @@ export class GuardWatcher {
 
     const agent = await this.d.runtime.loadAgent(p.agentId);
     if (!agent) return failed('unknown_agent', 'agent has no wallet or config');
-    const runtimeAgent = { ...agent, mode: p.mode };
+    // the token may have been removed from the agent's assets while still held: keep its decimals for the books
+    const assets = agent.assets.some((a) => a.address === p.token)
+      ? agent.assets
+      : [...agent.assets, { address: p.token, symbol: '', decimals: p.tokenDecimals, isStockToken: false }];
+    const runtimeAgent = { ...agent, mode: p.mode, assets };
 
     let amountIn = risk.amountIn;
     let amountOut = risk.expectedOut;

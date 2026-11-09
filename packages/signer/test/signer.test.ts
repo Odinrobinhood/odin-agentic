@@ -79,6 +79,7 @@ function makePolicy(over: Partial<AgentPolicy> = {}): AgentPolicy {
     quoteAsset: USDG,
     assets: new Set([TSLA, MEME]),
     stockTokens: new Set([TSLA]),
+    heldTokens: new Set(),
     openLivePositions: 0,
     ...over,
   };
@@ -263,6 +264,20 @@ describe('agent status and channels', () => {
     await rejects(signer.swap(swapReq(sellTsla), 'guard'), 'quote_not_allowed');
     policies.policy = makePolicy({ quoteAsset: WETH, assets: new Set([MEME]) });
     await expect(signer.swap(swapReq(encodePath([WETH, MEME], [3000])), 'agent')).resolves.toBeTruthy();
+  });
+
+  it('a held token removed from the assets can still be exited into the quote asset, and nothing else', async () => {
+    chain.addPool(OTHER, WETH, 500);
+    policies.policy = makePolicy({ heldTokens: new Set([OTHER]), stockTokens: new Set([TSLA, OTHER]) });
+    const exit = encodePath([OTHER, USDG], [500]);
+    await expect(signer.swap(swapReq(exit), 'guard')).resolves.toBeTruthy();
+    await expect(signer.swap(swapReq(exit, { gasParams: { ...gas, nonce: 9 } }), 'agent')).resolves.toBeTruthy();
+    // buying it back, or selling it into something other than the quote asset, is still refused
+    await rejects(signer.swap(swapReq(encodePath([USDG, OTHER], [500])), 'agent'), 'token_not_allowed');
+    await rejects(signer.swap(swapReq(encodePath([OTHER, WETH], [500])), 'agent'), 'token_not_allowed');
+    // held stock tokens keep their paused()/isBlocked() checks
+    chain.paused.add(OTHER);
+    await rejects(signer.swap(swapReq(exit, { gasParams: { ...gas, nonce: 10 } }), 'guard'), 'token_paused');
   });
 
   it('a paused agent cannot trade, but its guards can still exit', async () => {
