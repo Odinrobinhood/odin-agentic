@@ -7,10 +7,12 @@ export const INFLIGHT: ExecStatus[] = ['signed', 'broadcast'];
 export const NONCE_HOLDING: ExecStatus[] = ['signed', 'broadcast', 'confirmed', 'reverted'];
 
 export type NewExecution = {
-  decisionId: string;
+  /** null for withdrawals, which are not decisions */
+  decisionId: string | null;
+  agentId: string;
   wallet: Address;
   channel: 'agent' | 'guard';
-  kind: 'approve' | 'swap';
+  kind: 'approve' | 'swap' | 'withdraw';
   txHash: Hex;
   nonce: number;
   deadline: Date | null;
@@ -27,7 +29,7 @@ export type ExecutionPatch = {
   amountOut?: bigint;
 };
 
-export type InflightRow = { txHash: Hex; wallet: Address; kind: 'approve' | 'swap'; nonce: number; deadline: Date | null; createdAt: Date };
+export type InflightRow = { txHash: Hex; wallet: Address; kind: 'approve' | 'swap' | 'withdraw'; nonce: number; deadline: Date | null; createdAt: Date };
 
 export interface ExecutionStore {
   /**
@@ -79,10 +81,10 @@ export class PgExecutionStore implements ExecutionStore {
       const nonce = nextNonce(chainPending, inflightMax);
       const signed = await sign(nonce);
       await client.query(
-        `INSERT INTO executions (decision_id, wallet, channel, kind, tx_hash, nonce, deadline, status)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, 'signed')
+        `INSERT INTO executions (decision_id, agent_id, wallet, channel, kind, tx_hash, nonce, deadline, status)
+         VALUES ($1, $8, $2, $3, $4, $5, $6, $7, 'signed')
          ON CONFLICT (tx_hash) DO NOTHING`,
-        [meta.decisionId, w, meta.channel, meta.kind, signed.txHash, nonce, signed.deadline],
+        [meta.decisionId, w, meta.channel, meta.kind, signed.txHash, nonce, signed.deadline, meta.agentId],
       );
       await client.query(
         `INSERT INTO wallet_nonces (address, next_nonce) VALUES ($1, $2)
@@ -111,7 +113,7 @@ export class PgExecutionStore implements ExecutionStore {
   }
 
   async inflight(olderThan: Date): Promise<InflightRow[]> {
-    const r = await this.pool.query<{ tx_hash: Hex; wallet: Address; kind: 'approve' | 'swap'; nonce: string; deadline: Date | null; created_at: Date }>(
+    const r = await this.pool.query<{ tx_hash: Hex; wallet: Address; kind: 'approve' | 'swap' | 'withdraw'; nonce: string; deadline: Date | null; created_at: Date }>(
       `SELECT tx_hash, wallet, kind, nonce, deadline, created_at FROM executions
         WHERE status = ANY($1) AND created_at < $2 ORDER BY wallet, nonce`,
       [INFLIGHT, olderThan],

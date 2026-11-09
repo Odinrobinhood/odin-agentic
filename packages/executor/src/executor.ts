@@ -9,7 +9,7 @@ import type { ExecStatus, ExecutionStore } from './store.ts';
 export type ExecutorConfig = {
   /** Pinned SwapRouter02 — the spender whose allowance we check. Must equal the signer's. */
   router: Address;
-  gas: { approve: bigint; swapBase: bigint; swapPerHop: bigint };
+  gas: { approve: bigint; withdraw: bigint; swapBase: bigint; swapPerHop: bigint };
   /** maxFeePerGas = min(baseFee * baseFeeMultiplier + priorityFee, maxFeePerGas) */
   baseFeeMultiplier: bigint;
   priorityFee: bigint;
@@ -30,8 +30,19 @@ export type SwapJob = {
   amountOutMin: bigint;
 };
 
+export type WithdrawJob = {
+  agentId: string;
+  wallet: Address;
+  /** ERC-20 address, or null for native ETH */
+  token: Address | null;
+  amount: bigint;
+};
+
+/** What every transaction is recorded against. Withdrawals carry no decision. */
+type TxMeta = { decisionId: string | null; agentId: string; wallet: Address; channel: 'agent' | 'guard' };
+
 export type TxOutcome = {
-  kind: 'approve' | 'swap';
+  kind: 'approve' | 'swap' | 'withdraw';
   status: ExecStatus | 'rejected';
   txHash?: Hex;
   nonce?: number;
@@ -115,9 +126,20 @@ export class Executor {
     return { nonce, gas: gas.toString(), maxFeePerGas: maxFee.toString(), maxPriorityFeePerGas: c.priorityFee.toString() };
   }
 
+  /** Withdraw to the owner (the signer picks the recipient), resolved to a final status like any other tx. */
+  async executeWithdraw(job: WithdrawJob): Promise<TxOutcome & { recipient?: Address }> {
+    let recipient: Address | undefined;
+    const out = await this.runTx({ decisionId: null, agentId: job.agentId, wallet: job.wallet, channel: 'agent' }, 'withdraw', this.d.config.gas.withdraw, async (gasParams) => {
+      const s = await this.d.signer.withdraw({ agentId: job.agentId, token: job.token, amount: job.amount.toString(), gasParams });
+      recipient = s.recipient;
+      return s;
+    });
+    return { ...out, recipient };
+  }
+
   private async runTx(
-    job: SwapJob,
-    kind: 'approve' | 'swap',
+    job: TxMeta,
+    kind: 'approve' | 'swap' | 'withdraw',
     gas: bigint,
     sign: (g: GasParams) => Promise<SignedIntent>,
     onReceipt?: (r: RpcReceipt) => void,
@@ -125,7 +147,7 @@ export class Executor {
     const chainPending = await this.d.chain.nonce(job.wallet, 'pending');
     let signed: { txHash: Hex; signedTx: Hex; deadline: Date | null; nonce: number };
     try {
-      signed = await this.d.store.withNonce(job.wallet, chainPending, { decisionId: job.decisionId, channel: job.channel, kind }, async (nonce) => {
+      signed = await this.d.store.withNonce(job.wallet, chainPending, { decisionId: job.decisionId, agentId: job.agentId, channel: job.channel, kind }, async (nonce) => {
         const s = await sign(await this.gasParams(nonce, gas));
         if (s.nonce !== nonce) throw new Rejection('internal_error', `signer used nonce ${s.nonce}, expected ${nonce}`);
         return { txHash: s.txHash, signedTx: s.signedTx, deadline: s.deadline ? new Date(s.deadline * 1000) : null };

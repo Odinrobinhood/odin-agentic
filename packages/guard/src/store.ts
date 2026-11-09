@@ -27,13 +27,52 @@ export interface GuardStore {
   clearTrigger(guardId: string): Promise<void>;
   recordFailure(guardId: string, code: string): Promise<void>;
   markFired(guardId: string): Promise<void>;
-  alert(guardId: string, payload: Record<string, unknown>): Promise<void>;
+  alert(sourceId: string, payload: Record<string, unknown>): Promise<void>;
+  /** Take pending close-all requests (pending → processing), skipping rows another watcher holds. */
+  claimCloseRequests(): Promise<{ id: string; agentId: string; mode: Mode }[]>;
+  finishCloseRequest(id: string, status: 'done' | 'partial', result: unknown): Promise<void>;
+  /** Every open non-quote position of an agent in one mode, guarded or not. */
+  openPositions(agentId: string, mode: Mode): Promise<WatchedPosition[]>;
 }
 
 export class PgGuardStore implements GuardStore {
   private readonly pool: Pool;
   constructor(pool: Pool) {
     this.pool = pool;
+  }
+
+  async claimCloseRequests(): Promise<{ id: string; agentId: string; mode: Mode }[]> {
+    const r = await this.pool.query<{ id: string; agent_id: string; mode: Mode }>(
+      `UPDATE close_requests SET status = 'processing'
+        WHERE id IN (SELECT id FROM close_requests WHERE status = 'pending' ORDER BY requested_at LIMIT 10 FOR UPDATE SKIP LOCKED)
+        RETURNING id, agent_id, mode`,
+    );
+    return r.rows.map((x) => ({ id: x.id, agentId: x.agent_id, mode: x.mode }));
+  }
+
+  async finishCloseRequest(id: string, status: 'done' | 'partial', result: unknown): Promise<void> {
+    await this.pool.query('UPDATE close_requests SET status = $2, result = $3, processed_at = now() WHERE id = $1', [id, status, JSON.stringify(result)]);
+  }
+
+  async openPositions(agentId: string, mode: Mode): Promise<WatchedPosition[]> {
+    const r = await this.pool.query<{
+      position_id: string; token_address: string; token_decimals: number; quote_asset: string; quote_decimals: number; qty: string; deviation_timeout_seconds: number | null;
+    }>(
+      `SELECT p.id AS position_id, p.token_address, t.decimals AS token_decimals, c.quote_asset, q.decimals AS quote_decimals, p.qty, d.deviation_timeout_seconds
+         FROM positions p
+         JOIN agents a ON a.id = p.agent_id
+         JOIN tokens t ON t.address = p.token_address
+         JOIN LATERAL (SELECT quote_asset FROM agent_configs c WHERE c.agent_id = a.id ORDER BY version DESC LIMIT 1) c ON true
+         JOIN tokens q ON q.address = c.quote_asset
+         LEFT JOIN tp_sl_defaults d ON d.agent_id = a.id
+        WHERE p.agent_id = $1 AND p.mode = $2 AND p.qty > 0 AND p.token_address <> c.quote_asset AND a.status IN ('active', 'paused')`,
+      [agentId, mode],
+    );
+    return r.rows.map((x) => ({
+      positionId: x.position_id, agentId, mode, token: getAddress(x.token_address), tokenDecimals: x.token_decimals,
+      quote: getAddress(x.quote_asset), quoteDecimals: x.quote_decimals, qty: BigInt(x.qty),
+      deviationTimeoutSeconds: x.deviation_timeout_seconds ?? 300, guards: [],
+    }));
   }
 
   async watched(): Promise<WatchedPosition[]> {
@@ -97,7 +136,7 @@ export class PgGuardStore implements GuardStore {
     await this.pool.query(`UPDATE guards SET state = 'fired' WHERE id = $1`, [guardId]);
   }
 
-  async alert(guardId: string, payload: Record<string, unknown>): Promise<void> {
-    await this.pool.query(`INSERT INTO alert_events (source, source_id, payload) VALUES ('guard', $1, $2)`, [guardId, JSON.stringify(payload)]);
+  async alert(sourceId: string, payload: Record<string, unknown>): Promise<void> {
+    await this.pool.query(`INSERT INTO alert_events (source, source_id, payload) VALUES ('guard', $1, $2)`, [sourceId, JSON.stringify(payload)]);
   }
 }

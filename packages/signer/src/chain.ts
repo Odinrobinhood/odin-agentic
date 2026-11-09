@@ -1,4 +1,4 @@
-import { createPublicClient, fallback, http, parseAbi, zeroAddress, getAddress, type Address } from 'viem';
+import { createPublicClient, fallback, http, parseAbi, zeroAddress, getAddress, type Address, type Hex } from 'viem';
 
 export interface ChainReader {
   chainId(): Promise<number>;
@@ -7,6 +7,8 @@ export interface ChainReader {
   liquidPool(factory: Address, a: Address, b: Address, fee: number): Promise<Address | null>;
   isPaused(token: Address): Promise<boolean>;
   isBlocked(token: Address, wallet: Address): Promise<boolean>;
+  /** EIP-191 signature check for EOAs and ERC-1271 smart wallets. */
+  verifyMessage(address: Address, message: string, signature: Hex): Promise<boolean>;
 }
 
 const factoryAbi = parseAbi(['function getPool(address,address,uint24) view returns (address)']);
@@ -44,5 +46,9 @@ export class ViemChainReader implements ChainReader {
 
   isBlocked(token: Address, wallet: Address): Promise<boolean> {
     return this.client.readContract({ address: token, abi: stockAbi, functionName: 'isBlocked', args: [wallet] });
+  }
+
+  verifyMessage(address: Address, message: string, signature: Hex): Promise<boolean> {
+    return this.client.verifyMessage({ address, message, signature });
   }
 }

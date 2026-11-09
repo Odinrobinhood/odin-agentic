@@ -26,6 +26,9 @@ importers:
       '@odin/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@odin/executor':
+        specifier: workspace:*
+        version: link:../../packages/executor
       '@odin/market':
         specifier: workspace:*
         version: link:../../packages/market

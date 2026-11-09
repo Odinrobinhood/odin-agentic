@@ -11,6 +11,7 @@ const url = process.env.TEST_DATABASE_URL;
 describe.skipIf(!url)('PgExecutionStore (postgres)', () => {
   let pool: Pool;
   let decisionId: string;
+  let agentId: string;
   const wallet: Address = getAddress(`0x${randomUUID().replaceAll('-', '').padEnd(40, '0')}`);
 
   beforeAll(async () => {
@@ -24,13 +25,14 @@ describe.skipIf(!url)('PgExecutionStore (postgres)', () => {
       [a.rows[0]!.id],
     );
     decisionId = d.rows[0]!.id;
+    agentId = a.rows[0]!.id;
   });
 
   afterAll(async () => {
     await pool?.end();
   });
 
-  const meta = () => ({ decisionId, channel: 'agent' as const, kind: 'swap' as const });
+  const meta = () => ({ decisionId, agentId, channel: 'agent' as const, kind: 'swap' as const });
   const signer = (tag: string) => async () => ({ txHash: keccak256(toHex(`${tag}-${randomUUID()}`)), deadline: null });
 
   it('hands out distinct, gapless nonces under concurrency', async () => {

@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { timingSafeEqual, createHash } from 'node:crypto';
 import { z } from 'zod';
-import { ApproveRequest, Rejection, SwapRequest } from '@odin/shared';
+import { ApproveRequest, ExportRequest, Rejection, SwapRequest, WithdrawRequest } from '@odin/shared';
 import type { Channel } from './ledger.ts';
 import type { Signer } from './signer.ts';
 
@@ -57,6 +57,17 @@ export function createChannelServer(signer: Signer, channel: Channel, token: str
         const parsed = SwapRequest.safeParse(body);
         if (!parsed.success) throw new Rejection('bad_request', parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '));
         result = await signer.swap(parsed.data, channel);
+      } else if (req.url === '/v1/withdraw') {
+        const parsed = WithdrawRequest.safeParse(body);
+        if (!parsed.success) throw new Rejection('bad_request', parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '));
+        result = await signer.withdraw(parsed.data, channel);
+      } else if (req.url === '/v1/export') {
+        const parsed = ExportRequest.safeParse(body);
+        if (!parsed.success) throw new Rejection('bad_request', 'invalid export request');
+        const out = await signer.exportKey(parsed.data, channel);
+        // never log the key
+        log.warn(JSON.stringify({ msg: 'key exported', channel, agentId: parsed.data.agentId, address: out.address }));
+        return send(res, 200, out);
       } else if (req.url === '/v1/wallet' && channel === 'agent') {
         const parsed = WalletRequest.safeParse(body);
         if (!parsed.success) throw new Rejection('bad_request', 'derivationIndex must be a non-negative integer string');

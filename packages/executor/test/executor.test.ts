@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { getAddress, keccak256, toHex, type Address, type Hex } from 'viem';
-import { Rejection, encodePath, type ApproveRequest, type SwapRequest } from '@odin/shared';
+import { Rejection, encodePath, type ApproveRequest, type SwapRequest, type WithdrawRequest } from '@odin/shared';
 import { Executor, type ExecutorConfig } from '../src/executor.ts';
 import { MemoryExecutionStore, nextNonce } from '../src/store.ts';
 import { RpcError, type ExecChain, type RpcEndpoint, type RpcLog, type RpcReceipt } from '../src/rpc.ts';
@@ -15,6 +15,7 @@ const USDG = addr(0x2001);
 const TSLA = addr(0x3001);
 const POOL = addr(0x9001);
 const WALLET = addr(0xa11ce);
+const OWNER = addr(0x0be5);
 const AGENT = '11111111-1111-4111-8111-111111111111';
 const DECISION = '22222222-2222-4222-8222-222222222222';
 const T0 = Date.parse('2026-11-09T12:00:00Z');
@@ -87,11 +88,17 @@ class FakeSigner implements SignerApi {
   async swap(req: SwapRequest) {
     return this.sign('swap', req);
   }
+  async withdraw(req: WithdrawRequest) {
+    if (this.reject) throw this.reject;
+    this.calls.push({ kind: 'withdraw', req: req as unknown as SwapRequest });
+    const signedTx = toHex(`withdraw:${JSON.stringify(req)}`);
+    return { from: WALLET, to: OWNER, signedTx, txHash: keccak256(signedTx), nonce: req.gasParams.nonce, recipient: OWNER };
+  }
 }
 
 const config: ExecutorConfig = {
   router: ROUTER,
-  gas: { approve: 300_000n, swapBase: 600_000n, swapPerHop: 400_000n },
+  gas: { approve: 300_000n, withdraw: 200_000n, swapBase: 600_000n, swapPerHop: 400_000n },
   baseFeeMultiplier: 2n,
   priorityFee: 0n,
   maxFeePerGas: 1_000_000_000n,
@@ -235,14 +242,14 @@ describe('nonces', () => {
 
   it('serialises concurrent reservations for one wallet (agent + guard at once)', async () => {
     const sign = (n: number) => async () => ({ txHash: keccak256(toHex(`t${n}`)), deadline: null });
-    const got = await Promise.all([0, 1, 2].map((i) => store.withNonce(WALLET, 3, { decisionId: DECISION, channel: 'agent', kind: 'swap' }, sign(i))));
+    const got = await Promise.all([0, 1, 2].map((i) => store.withNonce(WALLET, 3, { decisionId: DECISION, agentId: AGENT, channel: 'agent', kind: 'swap' }, sign(i))));
     expect(got.map((g) => g.nonce).sort()).toEqual([3, 4, 5]);
   });
 });
 
 describe('watchdog', () => {
   it('detects nonce drift and reconciles stale in-flight executions', async () => {
-    const mk = (n: number) => store.withNonce(WALLET, n, { decisionId: DECISION, channel: 'agent', kind: 'swap' }, async () => ({ txHash: keccak256(toHex(`w${n}`)), deadline: new Date(T0 - 1) }));
+    const mk = (n: number) => store.withNonce(WALLET, n, { decisionId: DECISION, agentId: AGENT, channel: 'agent', kind: 'swap' }, async () => ({ txHash: keccak256(toHex(`w${n}`)), deadline: new Date(T0 - 1) }));
     const a = await mk(0);
     const b = await mk(1);
     await store.update(a.txHash, { status: 'broadcast' });
@@ -264,5 +271,20 @@ describe('realizedAmounts', () => {
   it('ignores transfers of other tokens and other parties', () => {
     const logs = [transfer(USDG, addr(1), POOL, 5n), transfer(TSLA, POOL, addr(2), 5n), transfer(USDG, WALLET, POOL, 7n)];
     expect(realizedAmounts(logs, WALLET, USDG, TSLA)).toEqual({ amountIn: 7n, amountOut: 0n });
+  });
+});
+
+describe('executeWithdraw', () => {
+  it('signs via the signer (which picks the owner), broadcasts and records without a decision', async () => {
+    chain.onBroadcast = (h) => ok(h);
+    const out = await executor.executeWithdraw({ agentId: AGENT, wallet: WALLET, token: USDG, amount: 5n });
+    expect(out).toMatchObject({ kind: 'withdraw', status: 'confirmed', recipient: OWNER, nonce: 7 });
+    expect(signer.calls[0]!.req).toMatchObject({ agentId: AGENT, token: USDG, amount: '5', gasParams: { gas: '200000' } });
+    expect(store.rows[0]).toMatchObject({ kind: 'withdraw', decisionId: null, agentId: AGENT, status: 'confirmed' });
+  });
+
+  it('reports a refused broadcast (e.g. not enough ETH for gas)', async () => {
+    for (const e of chain.endpoints) e.sendError = 'insufficient funds for gas * price + value';
+    expect(await executor.executeWithdraw({ agentId: AGENT, wallet: WALLET, token: null, amount: 1n })).toMatchObject({ status: 'dropped', code: 'insufficient_gas' });
   });
 });

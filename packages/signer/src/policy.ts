@@ -14,8 +14,12 @@ export type AgentPolicy = {
   openLivePositions: number;
 };
 
+/** What withdrawals and key exports need: the derived wallet and its owner (works for any agent status, config or not). */
+export type WalletOwner = { agentId: string; derivationIndex: bigint; wallet: Address; owner: Address };
+
 export interface PolicyStore {
   load(agentId: string): Promise<AgentPolicy | null>;
+  walletOwner(agentId: string): Promise<WalletOwner | null>;
 }
 
 /** Reads policy straight from Postgres with the signer's read-only role; nothing comes from the caller. */
@@ -23,6 +27,18 @@ export class PgPolicyStore implements PolicyStore {
   private readonly pool: Pool;
   constructor(pool: Pool) {
     this.pool = pool;
+  }
+
+  async walletOwner(agentId: string): Promise<WalletOwner | null> {
+    const r = await this.pool.query<{ derivation_index: string; address: string; custody: string; owner: string }>(
+      `SELECT w.derivation_index, w.address, w.custody, u.wallet_address AS owner
+         FROM agents a JOIN agent_wallets w ON w.agent_id = a.id JOIN users u ON u.id = a.user_id
+        WHERE a.id = $1`,
+      [agentId],
+    );
+    const x = r.rows[0];
+    if (!x || x.custody !== 'derived') return null;
+    return { agentId, derivationIndex: BigInt(x.derivation_index), wallet: getAddress(x.address), owner: getAddress(x.owner) };
   }
 
   async load(agentId: string): Promise<AgentPolicy | null> {

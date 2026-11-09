@@ -1,11 +1,14 @@
 import { readFileSync } from 'node:fs';
-import { createPublicClient, fallback, getAddress, http, type Address } from 'viem';
+import { createPublicClient, fallback, getAddress, http, parseAbi, type Address, type Hex } from 'viem';
+import { Executor, FallbackChain, HttpSignerClient, PgExecutionStore, loadExecutorConfig } from '@odin/executor';
+import { Rejection, type RejectionCode } from '@odin/shared';
 import { createPool } from '@odin/db';
 import { loadMarketConfig, PgMarketStore, TokenRegistry, ViemMarketChain } from '@odin/market';
 import { PgRuntimeStore } from '@odin/runtime';
 import { AuthService } from './auth.ts';
 import { AgentService } from './agents.ts';
 import { buildServer } from './server.ts';
+import { FundsService } from './funds.ts';
 
 function req(key: string): string {
   const v = process.env[key];
@@ -51,8 +54,34 @@ const agents = new AgentService({
   },
 });
 
+const exCfg = loadExecutorConfig();
+const executor = new Executor({
+  config: exCfg,
+  chain: new FallbackChain(exCfg.rpcUrls),
+  signer: new HttpSignerClient(req('SIGNER_AGENT_URL'), agentToken),
+  store: new PgExecutionStore(pool),
+});
+const funds = new FundsService({
+  pool,
+  executor,
+  chainId: market.chainId,
+  readDecimals: (token) => chain.readContract({ address: token, abi: parseAbi(['function decimals() view returns (uint8)']), functionName: 'decimals' }),
+  exporter: {
+    exportKey: async (body) => {
+      const res = await fetch(`${req('SIGNER_AGENT_URL')}/v1/export`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${agentToken}`, 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const out = (await res.json()) as { address: Address; privateKey: Hex } & { error?: { code: RejectionCode; message: string } };
+      if (!res.ok || out.error) throw new Rejection(out.error?.code ?? 'internal_error', out.error?.message ?? `signer ${res.status}`);
+      return out;
+    },
+  },
+});
+
 const runtimeStore = new PgRuntimeStore(pool);
-const app = buildServer({ auth, agents, setPaperBalance: (a, q, raw) => runtimeStore.setPaperBalance(a, q, raw) });
+const app = buildServer({ auth, agents, funds, setPaperBalance: (a, q, raw) => runtimeStore.setPaperBalance(a, q, raw) });
 const [host, port] = (process.env.API_LISTEN ?? '127.0.0.1:7500').split(':');
 await app.listen({ host: host!, port: Number(port) });
 console.log(JSON.stringify({ msg: 'api up', listen: `${host}:${port}`, domain: process.env.API_SIWE_DOMAIN }));

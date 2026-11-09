@@ -1,11 +1,12 @@
 import type { Address, Hex } from 'viem';
-import { REJECTION_CODES, Rejection, type ApproveRequest, type RejectionCode, type SwapRequest } from '@odin/shared';
+import { REJECTION_CODES, Rejection, type ApproveRequest, type RejectionCode, type SwapRequest, type WithdrawRequest } from '@odin/shared';
 
 export type SignedIntent = { from: Address; to: Address; txHash: Hex; signedTx: Hex; nonce: number; deadline?: number };
 
 export interface SignerApi {
   approve(req: ApproveRequest): Promise<SignedIntent>;
   swap(req: SwapRequest): Promise<SignedIntent>;
+  withdraw(req: WithdrawRequest): Promise<SignedIntent & { recipient: Address }>;
 }
 
 /**
@@ -29,6 +30,10 @@ export class HttpSignerClient implements SignerApi {
 
   swap(req: SwapRequest): Promise<SignedIntent> {
     return this.post('/v1/swap', req);
+  }
+
+  withdraw(req: WithdrawRequest): Promise<SignedIntent & { recipient: Address }> {
+    return this.post('/v1/withdraw', req) as Promise<SignedIntent & { recipient: Address }>;
   }
 
   private async post(route: string, body: unknown): Promise<SignedIntent> {

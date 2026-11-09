@@ -1,10 +1,14 @@
-import { encodeFunctionData, keccak256, parseAbi, type Address, type Hex } from 'viem';
+import { encodeFunctionData, getAddress, keccak256, parseAbi, type Address, type Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import {
+  EXPORT_MAX_TTL_SECONDS,
   Rejection,
   UNLIMITED_APPROVAL_THRESHOLD,
   decodePath,
+  parseExportKeyMessage,
   type ApproveRequest,
+  type ExportRequest,
+  type WithdrawRequest,
   type DecodedPath,
   type GasParams,
   type SwapRequest,
@@ -16,6 +20,7 @@ import type { AgentPolicy, PolicyStore } from './policy.ts';
 import { deriveAgentKey } from './keys.ts';
 
 const erc20Abi = parseAbi(['function approve(address spender, uint256 amount) returns (bool)']);
+const transferAbi = parseAbi(['function transfer(address to, uint256 amount) returns (bool)']);
 const routerAbi = parseAbi([
   'function multicall(uint256 deadline, bytes[] data) payable returns (bytes[])',
   'struct ExactInputParams { bytes path; address recipient; uint256 amountIn; uint256 amountOutMinimum; }',
@@ -67,6 +72,58 @@ export class Signer {
   /** Public address for a derivation index, so the API can record a new agent wallet without the seed. */
   addressFor(derivationIndex: bigint): Address {
     return privateKeyToAccount(deriveAgentKey(this.d.seed, derivationIndex)).address;
+  }
+
+  /**
+   * Withdraw (architecture §6): ERC-20 transfer or native ETH, ALWAYS to the agent owner's SIWE wallet, read
+   * here from the database. Allowed for any agent status (a retired agent's funds must still come back),
+   * agent channel only.
+   */
+  async withdraw(req: WithdrawRequest, channel: Channel): Promise<SignedIntent & { recipient: Address }> {
+    if (channel !== 'agent') throw new Rejection('unauthorized', 'withdrawals are not available on this channel');
+    const w = await this.d.policies.walletOwner(req.agentId);
+    if (!w) throw new Rejection('unknown_agent', 'agent has no derived wallet');
+    const amount = BigInt(req.amount);
+    if (amount === 0n) throw new Rejection('amount_invalid', 'amount must be > 0');
+    if (amount >= UNLIMITED_APPROVAL_THRESHOLD) throw new Rejection('amount_invalid', 'amount is at or above 2^255');
+    const signer = { ...w, openLivePositions: 0 };
+    const signed =
+      req.token === null
+        ? await this.signAndRecord(signer, channel, 'withdraw', w.owner, '0x', req.gasParams, amount)
+        : await this.signAndRecord(
+            signer,
+            channel,
+            'withdraw',
+            getAddress(req.token),
+            encodeFunctionData({ abi: transferAbi, functionName: 'transfer', args: [w.owner, amount] }),
+            req.gasParams,
+          );
+    return { ...signed, recipient: w.owner };
+  }
+
+  /**
+   * Key export (architecture §6): only with the owner's own wallet signature over the exact export message,
+   * verified HERE (EOA or ERC-1271) with a single-use nonce and a short expiry, so the API alone cannot export.
+   */
+  async exportKey(req: ExportRequest, channel: Channel): Promise<{ address: Address; privateKey: Hex }> {
+    if (channel !== 'agent') throw new Rejection('unauthorized', 'key export is not available on this channel');
+    const w = await this.d.policies.walletOwner(req.agentId);
+    if (!w) throw new Rejection('unknown_agent', 'agent has no derived wallet');
+    const m = parseExportKeyMessage(req.message);
+    if (!m) throw new Rejection('bad_request', 'not an export message');
+    if (m.agentId !== req.agentId || m.wallet !== w.wallet || m.chainId !== this.d.config.chainId) {
+      throw new Rejection('unauthorized', 'export message does not match this agent wallet or chain');
+    }
+    const now = this.now().getTime();
+    if (m.expiresAt.getTime() <= now || m.expiresAt.getTime() - now > EXPORT_MAX_TTL_SECONDS * 1000) {
+      throw new Rejection('unauthorized', 'export message expired or valid for too long');
+    }
+    const ok = await this.read(() => this.d.chain.verifyMessage(w.owner, req.message, req.signature as Hex));
+    if (!ok) throw new Rejection('unauthorized', 'export message is not signed by the agent owner');
+    if (!(await this.d.ledger.burnExportNonce(m.nonce, req.agentId))) throw new Rejection('unauthorized', 'export message already used');
+    const privateKey = deriveAgentKey(this.d.seed, w.derivationIndex);
+    if (privateKeyToAccount(privateKey).address !== w.wallet) throw new Rejection('internal_error', 'derived key does not match the recorded agent wallet');
+    return { address: w.wallet, privateKey };
   }
 
   async approve(req: ApproveRequest, channel: Channel): Promise<SignedIntent> {
@@ -158,12 +215,13 @@ export class Signer {
   }
 
   private async signAndRecord(
-    p: AgentPolicy,
+    p: Pick<AgentPolicy, 'agentId' | 'derivationIndex' | 'wallet' | 'openLivePositions'>,
     channel: Channel,
-    kind: 'approve' | 'swap',
+    kind: 'approve' | 'swap' | 'withdraw',
     to: Address,
     data: Hex,
     g: GasParams,
+    value = 0n,
   ): Promise<SignedIntent> {
     const gas = BigInt(g.gas);
     const maxFeePerGas = BigInt(g.maxFeePerGas);
@@ -180,7 +238,7 @@ export class Signer {
       chainId: this.d.config.chainId,
       to,
       data,
-      value: 0n,
+      value,
       nonce: g.nonce,
       gas,
       maxFeePerGas,

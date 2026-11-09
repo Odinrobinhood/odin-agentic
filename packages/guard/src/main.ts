@@ -8,6 +8,7 @@ log({ msg: 'guard watcher up', pollMs: POLL_MS });
 for (;;) {
   try {
     for (const e of await watcher.checkOnce()) log({ msg: 'guard', ...e });
+    for (const c of await watcher.processCloseRequests()) log({ msg: 'close all', ...c });
   } catch (e) {
     log({ msg: 'guard pass failed', error: (e as Error).message });
   }

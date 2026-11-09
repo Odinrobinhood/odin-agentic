@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach } from 'vitest';
-import { decodeFunctionData, getAddress, parseAbi, parseTransaction, recoverTransactionAddress, type Address, type Hex } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
-import { ApproveRequest, Rejection, SwapRequest, encodePath, type GasParams } from '@odin/shared';
+import { decodeFunctionData, getAddress, parseAbi, parseTransaction, recoverTransactionAddress, verifyMessage, type Address, type Hex } from 'viem';
+import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
+import { ApproveRequest, Rejection, SwapRequest, WithdrawRequest, encodePath, exportKeyMessage, type GasParams } from '@odin/shared';
 import { Signer, type SignerDeps } from '../src/signer.ts';
 import { MemoryLedger } from '../src/ledger.ts';
 import { deriveAgentKey } from '../src/keys.ts';
@@ -21,6 +21,7 @@ const AGENT_ID = '11111111-1111-4111-8111-111111111111';
 const SEED = new Uint8Array(32).fill(7);
 const WALLET = privateKeyToAccount(deriveAgentKey(SEED, 5n)).address;
 const NOW = new Date('2026-11-09T12:00:00Z');
+const OWNER = privateKeyToAccount(generatePrivateKey());
 
 const routerAbi = parseAbi([
   'function multicall(uint256 deadline, bytes[] data) payable returns (bytes[])',
@@ -56,6 +57,9 @@ class FakeChain implements ChainReader {
   async isBlocked(t: Address) {
     return this.blocked.has(t);
   }
+  async verifyMessage(address: Address, message: string, signature: Hex) {
+    return verifyMessage({ address, message, signature });
+  }
 }
 
 class StaticPolicies implements PolicyStore {
@@ -65,6 +69,9 @@ class StaticPolicies implements PolicyStore {
   }
   async load(id: string) {
     return this.policy && this.policy.agentId === id ? this.policy : null;
+  }
+  async walletOwner(id: string) {
+    return id === AGENT_ID ? { agentId: id, derivationIndex: 5n, wallet: WALLET, owner: OWNER.address } : null;
   }
 }
 
@@ -313,5 +320,59 @@ describe('preflight', () => {
     await rejects(signer.preflight(), 'chain_mismatch');
     build();
     await expect(signer.preflight()).resolves.toBeUndefined();
+  });
+});
+
+describe('withdraw', () => {
+  const transferAbi = parseAbi(['function transfer(address to, uint256 amount) returns (bool)']);
+
+  it('sends ERC-20s and native ETH only to the owner, for any agent status', async () => {
+    policies.policy = makePolicy({ status: 'retired' });
+    const erc20 = await signer.withdraw({ agentId: AGENT_ID, token: USDG, amount: '123', gasParams: gas }, 'agent');
+    const tx = parseTransaction(erc20.signedTx);
+    expect(tx.to).toBe(USDG);
+    expect(decodeFunctionData({ abi: transferAbi, data: tx.data! }).args).toEqual([OWNER.address, 123n]);
+    expect(erc20.recipient).toBe(OWNER.address);
+
+    const eth = await signer.withdraw({ agentId: AGENT_ID, token: null, amount: '1000', gasParams: { ...gas, nonce: 4 } }, 'agent');
+    const etx = parseTransaction(eth.signedTx);
+    expect(getAddress(etx.to!)).toBe(OWNER.address);
+    expect(etx.value).toBe(1000n);
+    expect(ledger.rows.map((r) => r.kind)).toEqual(['withdraw', 'withdraw']);
+  });
+
+  it('has no recipient field, refuses the guard channel and zero amounts', async () => {
+    expect(WithdrawRequest.safeParse({ agentId: AGENT_ID, token: null, amount: '1', gasParams: gas, recipient: ATTACKER }).success).toBe(false);
+    await rejects(signer.withdraw({ agentId: AGENT_ID, token: null, amount: '1', gasParams: gas }, 'guard'), 'unauthorized');
+    await rejects(signer.withdraw({ agentId: AGENT_ID, token: null, amount: '0', gasParams: gas }, 'agent'), 'amount_invalid');
+    await rejects(signer.withdraw({ agentId: '22222222-2222-4222-8222-222222222222', token: null, amount: '1', gasParams: gas }, 'agent'), 'unknown_agent');
+  });
+});
+
+describe('key export', () => {
+  const msg = (over: Partial<Parameters<typeof exportKeyMessage>[0]> = {}) =>
+    exportKeyMessage({ wallet: WALLET, agentId: AGENT_ID, chainId: 46630, nonce: 'a1b2c3d4e5f6a7b8c9d0', expiresAt: new Date(NOW.getTime() + 300_000), ...over });
+
+  it('returns the key only for the owner signature over a fresh, matching, single-use message', async () => {
+    const message = msg();
+    const signature = await OWNER.signMessage({ message });
+    const out = await signer.exportKey({ agentId: AGENT_ID, message, signature }, 'agent');
+    expect(out.address).toBe(WALLET);
+    expect(privateKeyToAccount(out.privateKey).address).toBe(WALLET);
+    await rejects(signer.exportKey({ agentId: AGENT_ID, message, signature }, 'agent'), 'unauthorized'); // nonce burned
+  });
+
+  it('refuses other signers, other wallets/chains, expired or long-lived messages, edited text and the guard channel', async () => {
+    const stranger = privateKeyToAccount(generatePrivateKey());
+    const m1 = msg({ nonce: 'stranger0000000000001' });
+    await rejects(signer.exportKey({ agentId: AGENT_ID, message: m1, signature: await stranger.signMessage({ message: m1 }) }, 'agent'), 'unauthorized');
+    for (const over of [{ wallet: ATTACKER }, { chainId: 4663 }, { expiresAt: new Date(NOW.getTime() - 1) }, { expiresAt: new Date(NOW.getTime() + 3_600_000) }]) {
+      const m = msg({ ...over, nonce: `n${Math.random().toString(36).slice(2).padEnd(20, '0')}` });
+      await rejects(signer.exportKey({ agentId: AGENT_ID, message: m, signature: await OWNER.signMessage({ message: m }) }, 'agent'), 'unauthorized');
+    }
+    const edited = msg({ nonce: 'edited00000000000001' }) + '\nP.S. also send funds';
+    await rejects(signer.exportKey({ agentId: AGENT_ID, message: edited, signature: await OWNER.signMessage({ message: edited }) }, 'agent'), 'bad_request');
+    const m2 = msg({ nonce: 'guardchan0000000001' });
+    await rejects(signer.exportKey({ agentId: AGENT_ID, message: m2, signature: await OWNER.signMessage({ message: m2 }) }, 'guard'), 'unauthorized');
   });
 });

@@ -6,7 +6,7 @@ export type Channel = 'agent' | 'guard';
 export type LedgerEntry = {
   agentId: string;
   channel: Channel;
-  kind: 'approve' | 'swap';
+  kind: 'approve' | 'swap' | 'withdraw';
   txHash: string;
   nonce: number;
   cap: number;
@@ -18,6 +18,8 @@ export interface Ledger {
    * Must succeed before the signed transaction is returned to the caller.
    */
   record(entry: LedgerEntry, now: Date): Promise<void>;
+  /** Burn a key-export nonce; false if it was already used. */
+  burnExportNonce(nonce: string, agentId: string): Promise<boolean>;
 }
 
 export function utcDay(now: Date): string {
@@ -28,6 +30,11 @@ export class PgLedger implements Ledger {
   private readonly pool: Pool;
   constructor(pool: Pool) {
     this.pool = pool;
+  }
+
+  async burnExportNonce(nonce: string, agentId: string): Promise<boolean> {
+    const r = await this.pool.query('INSERT INTO signer_exports (nonce, agent_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [nonce, agentId]);
+    return r.rowCount === 1;
   }
 
   async record(e: LedgerEntry, now: Date): Promise<void> {
@@ -66,6 +73,12 @@ export class PgLedger implements Ledger {
 
 export class MemoryLedger implements Ledger {
   readonly rows: (LedgerEntry & { day: string })[] = [];
+  readonly exportNonces = new Set<string>();
+  async burnExportNonce(nonce: string): Promise<boolean> {
+    if (this.exportNonces.has(nonce)) return false;
+    this.exportNonces.add(nonce);
+    return true;
+  }
   async record(e: LedgerEntry, now: Date): Promise<void> {
     if (this.rows.some((r) => r.txHash === e.txHash && r.agentId === e.agentId)) return;
     const day = utcDay(now);

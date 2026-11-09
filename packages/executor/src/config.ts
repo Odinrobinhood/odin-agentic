@@ -24,6 +24,7 @@ export function loadExecutorConfig(env: NodeJS.ProcessEnv = process.env): Execut
     router: getAddress(req(env, 'EXECUTOR_ROUTER')),
     gas: {
       approve: big(env, 'EXECUTOR_GAS_APPROVE', 300_000n),
+      withdraw: big(env, 'EXECUTOR_GAS_WITHDRAW', 300_000n),
       swapBase: big(env, 'EXECUTOR_GAS_SWAP_BASE', 600_000n),
       swapPerHop: big(env, 'EXECUTOR_GAS_SWAP_PER_HOP', 400_000n),
     },

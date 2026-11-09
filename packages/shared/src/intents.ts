@@ -36,3 +36,22 @@ export type SwapRequest = z.infer<typeof SwapRequest>;
 export type GasParams = z.infer<typeof GasParams>;
 
 export const addressSchema = z.string().refine((v) => isAddress(v), 'must be an address');
+
+/** Withdraw to the agent owner's SIWE wallet. There is no recipient field: the signer reads the owner itself. */
+export const WithdrawRequest = z.object({
+  agentId: z.string().uuid(),
+  /** ERC-20 address, or null for native ETH. */
+  token: z.string().refine((v) => isAddress(v), 'must be an address').nullable(),
+  amount: uintString,
+  gasParams: GasParams,
+}).strict();
+
+/** Key export: the owner's signature over the exact export message, verified by the signer itself. */
+export const ExportRequest = z.object({
+  agentId: z.string().uuid(),
+  message: z.string().max(1000),
+  signature: hex,
+}).strict();
+
+export type WithdrawRequest = z.infer<typeof WithdrawRequest>;
+export type ExportRequest = z.infer<typeof ExportRequest>;

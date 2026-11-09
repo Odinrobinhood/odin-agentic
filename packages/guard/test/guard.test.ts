@@ -42,6 +42,19 @@ class FakeGuards implements GuardStore {
   async alert(_id: string, payload: Record<string, unknown>) {
     this.alerts.push(payload);
   }
+  closeRequests: { id: string; agentId: string; mode: 'live' | 'paper' }[] = [];
+  finished: { id: string; status: string; result: unknown }[] = [];
+  async claimCloseRequests() {
+    const r = this.closeRequests;
+    this.closeRequests = [];
+    return r;
+  }
+  async finishCloseRequest(id: string, status: 'done' | 'partial', result: unknown) {
+    this.finished.push({ id, status, result });
+  }
+  async openPositions(agentId: string, mode: 'live' | 'paper') {
+    return this.positions.filter((p) => p.agentId === agentId && p.mode === mode);
+  }
 }
 
 const guards = (sl: number, tp: number, over: Partial<ArmedGuard> = {}): ArmedGuard[] => [
@@ -63,6 +76,7 @@ let decisions: DecisionRow[];
 let rejections: string[];
 let fills: { agent: AgentRuntimeState; fill: Fill }[];
 let watcher: GuardWatcher;
+let watcherRisk: (i: RiskIntent) => Promise<RiskResult>;
 
 beforeEach(() => {
   store = new FakeGuards();
@@ -74,6 +88,7 @@ beforeEach(() => {
   fills = [];
   riskResult = { ok: true, tokenIn: WETH, tokenOut: USDG, path: PATH, amountIn: 10n ** 18n, expectedOut: 1_890_000_000n, amountOutMin: 1_870_000_000n, slippageBps: 100, poolPrice: 1890, refereePrice: null, deviationBps: null, overrides: [] };
   swap = { ok: true, swap: { kind: 'swap', status: 'confirmed' }, amountIn: 10n ** 18n, amountOut: 1_885_000_000n };
+  watcherRisk = async (i) => (intents.push(i), riskResult);
   const runtime: GuardDeps['runtime'] = {
     loadAgent: async () => ({ agentId: 'a1', userId: 'u', status: 'paused', mode: 'live', wallet: WALLET, config: { version: 1, mandate: '', modelName: 'm', maxTokens: 1, contextInputs: {}, cadenceSeconds: 60 }, quote: { address: USDG, symbol: 'USDG', decimals: 6, isStockToken: false }, assets: [{ address: WETH, symbol: 'WETH', decimals: 18, isStockToken: false }], tpSl: null }),
     insertDecision: async (d) => (decisions.push(d), `d${decisions.length}`),
@@ -85,7 +100,7 @@ beforeEach(() => {
     store,
     runtime,
     quote: async () => quoteOut,
-    risk: { evaluate: async (i) => (intents.push(i), riskResult) },
+    risk: { evaluate: (i) => watcherRisk(i) },
     executor: { executeSwap: async (j) => (jobs.push(j), swap) },
   });
 });
@@ -174,5 +189,35 @@ describe('GuardWatcher', () => {
     quoteOut = 0n;
     store.positions = [position()];
     expect(await watcher.checkOnce()).toEqual([{ kind: 'unpriced', positionId: 'p1', reason: 'no route or zero quote' }]);
+  });
+});
+
+describe('close all positions', () => {
+  it('sells every open position with origin user_close and reports per token, including price deviations', async () => {
+    const TSLA = addr(0x3001);
+    store.positions = [position({ mode: 'live' }), position({ positionId: 'p2', mode: 'live', token: TSLA, guards: [] })];
+    store.closeRequests = [{ id: 'c1', agentId: 'a1', mode: 'live' }];
+    let n = 0;
+    watcherRisk = async (i) => {
+      intents.push(i);
+      return n++ === 0 ? riskResult : { ok: false, code: 'price_deviation', message: 'pool off referee', check: 5 };
+    };
+    const [r] = await watcher.processCloseRequests();
+    expect(intents.map((i) => [i.origin, i.action, i.size, i.guard])).toEqual([
+      ['user_close', 'sell', { type: 'fraction_of_position', value: '1' }, undefined],
+      ['user_close', 'sell', { type: 'fraction_of_position', value: '1' }, undefined],
+    ]);
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]!.channel).toBe('guard');
+    expect(r).toMatchObject({ requestId: 'c1', status: 'partial' });
+    expect(r!.tokens).toEqual([
+      { token: WETH, ok: true, amountIn: (10n ** 18n).toString(), amountOut: '1885000000' },
+      { token: TSLA, ok: false, code: 'price_deviation', message: 'pool off referee' },
+    ]);
+    expect(decisions.map((d) => d.origin)).toEqual(['user_close', 'user_close']);
+    expect(rejections).toEqual(['price_deviation']);
+    expect(store.finished[0]).toMatchObject({ id: 'c1', status: 'partial' });
+    expect(store.alerts.at(-1)).toMatchObject({ event: 'close_all', status: 'partial' });
+    expect(store.fired).toEqual([]); // closing is not a guard firing
   });
 });

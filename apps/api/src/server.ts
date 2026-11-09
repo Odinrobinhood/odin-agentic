@@ -3,11 +3,13 @@ import { z, type ZodTypeAny } from 'zod';
 import type { Address, Hex } from 'viem';
 import { Rejection, type RejectionCode } from '@odin/shared';
 import type { AuthService } from './auth.ts';
+import { CloseAllInput, ExportInput, WithdrawInput, type FundsService } from './funds.ts';
 import { AgentService, AssetsInput, ConfigInput, GuardOverrideInput, ModeInput, PaperFundInput, RiskInput, StatusInput, TpSlInput } from './agents.ts';
 
 export type ApiDeps = {
   auth: AuthService;
   agents: AgentService;
+  funds: FundsService;
   setPaperBalance: (agentId: string, quote: Address, raw: bigint) => Promise<void>;
   /** Fixed-window limits (architecture §6): per IP for auth routes, per user for everything else. */
   rateLimit?: { perIpPerMinute: number; perUserPerMinute: number };
@@ -136,6 +138,37 @@ export function buildServer(d: ApiDeps): FastifyInstance {
   app.get('/v1/agents/:id/decisions', { preHandler: authed }, async (req) => json(await d.agents.decisions(uid(req), aid(req), Number((req.query as { limit?: string }).limit ?? 50))));
   app.get('/v1/agents/:id/positions', { preHandler: authed }, async (req) => json(await d.agents.positions(uid(req), aid(req))));
   app.get('/v1/agents/:id/executions', { preHandler: authed }, async (req) => json(await d.agents.executions(uid(req), aid(req), Number((req.query as { limit?: string }).limit ?? 50))));
+
+  // ── funds (architecture §6): recipient is always the owner; sensitive actions need a fresh SIWE ─────────
+  app.post('/v1/agents/:id/withdraw', { preHandler: authed }, async (req) => {
+    await d.agents.owned(uid(req), aid(req));
+    await d.auth.requireFreshSiwe(uid(req), stepUp);
+    return json(await d.funds.withdraw(aid(req), parse(WithdrawInput, req.body)));
+  });
+  app.get('/v1/agents/:id/withdrawals', { preHandler: authed }, async (req) => {
+    await d.agents.owned(uid(req), aid(req));
+    return json(await d.funds.withdrawals(aid(req)));
+  });
+  app.post('/v1/agents/:id/export/message', { preHandler: authed }, async (req) => {
+    await d.agents.owned(uid(req), aid(req));
+    await d.auth.requireFreshSiwe(uid(req), stepUp);
+    return d.funds.exportMessage(aid(req));
+  });
+  app.post('/v1/agents/:id/export', { preHandler: authed }, async (req, reply) => {
+    await d.agents.owned(uid(req), aid(req));
+    await d.auth.requireFreshSiwe(uid(req), stepUp);
+    const out = await d.funds.exportKey(aid(req), parse(ExportInput, req.body));
+    reply.header('cache-control', 'no-store');
+    return out;
+  });
+  app.post('/v1/agents/:id/close-all', { preHandler: authed }, async (req) => {
+    const a = await d.agents.owned(uid(req), aid(req));
+    return d.funds.closeAll(aid(req), a.status, a.mode, parse(CloseAllInput, req.body).mode);
+  });
+  app.get('/v1/agents/:id/close-requests/:requestId', { preHandler: authed }, async (req) => {
+    await d.agents.owned(uid(req), aid(req));
+    return json(await d.funds.closeRequest(aid(req), (req.params as { requestId: string }).requestId));
+  });
 
   return app;
 }

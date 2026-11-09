@@ -6,6 +6,7 @@
  */
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { createSiweMessage } from 'viem/siwe';
+import { createPool } from '@odin/db';
 
 const base = `http://${process.env.API_LISTEN ?? '127.0.0.1:7500'}`;
 const call = async (method: string, path: string, body?: unknown, token?: string) => {
@@ -36,6 +37,39 @@ show('-- paper fund 500 USDG:', await call('POST', `/v1/agents/${id}/paper/fund`
 show('-- activate:', await call('POST', `/v1/agents/${id}/status`, { action: 'activate' }, t));
 show('-- agent:', await call('GET', `/v1/agents/${id}`, undefined, t));
 show('-- positions:', await call('GET', `/v1/agents/${id}/positions`, undefined, t));
+// ── funds ──────────────────────────────────────────────────────────────────
+show('-- withdraw 1 USDG (signer sends to the owner; node refuses: no ETH for gas):', await call('POST', `/v1/agents/${id}/withdraw`, { token: process.env.CHAIN_USDG, amount: '1' }, t));
+
+const em = await call('POST', `/v1/agents/${id}/export/message`, {}, t);
+const exportSig = await account.signMessage({ message: em.body.message });
+const exp = await call('POST', `/v1/agents/${id}/export`, { message: em.body.message, signature: exportSig }, t);
+const derived = exp.status === 200 ? privateKeyToAccount(exp.body.privateKey).address : null;
+console.log('-- export key (owner-signed):', exp.status, 'derives agent wallet:', derived === agent.body.wallet);
+show('-- export replay (nonce burned by signer):', await call('POST', `/v1/agents/${id}/export`, { message: em.body.message, signature: exportSig }, t));
+const stranger = privateKeyToAccount(generatePrivateKey());
+const em2 = await call('POST', `/v1/agents/${id}/export/message`, {}, t);
+show('-- export signed by someone else:', await call('POST', `/v1/agents/${id}/export`, { message: em2.body.message, signature: await stranger.signMessage({ message: em2.body.message }) }, t));
+
+// close-all: give the paper agent a WETH position, queue the close, the running guard watcher executes it
+const pool = createPool('postgresql://odin@/odin?host=/var/run/postgresql', { max: 1 });
+await pool.query(
+  `INSERT INTO positions (agent_id, token_address, mode, qty, avg_entry_price) VALUES ($1, $2, 'paper', '10000000000000000', 2000)
+   ON CONFLICT (agent_id, token_address, mode) DO UPDATE SET qty = EXCLUDED.qty`,
+  [id, process.env.CHAIN_WETH!.toLowerCase()],
+);
+const close = await call('POST', `/v1/agents/${id}/close-all`, {}, t);
+show('-- close-all queued:', close);
+let cr: { status: number; body: Record<string, any> } = close;
+for (let i = 0; i < 20; i++) {
+  await new Promise((r) => setTimeout(r, 1000));
+  cr = await call('GET', `/v1/agents/${id}/close-requests/${close.body.requestId}`, undefined, t);
+  if (cr.body.status !== 'pending' && cr.body.status !== 'processing') break;
+}
+show('-- close-all result (guard watcher):', cr);
+show('-- positions after close:', await call('GET', `/v1/agents/${id}/positions`, undefined, t));
+await pool.end();
+
 // leave the staging scheduler clean: this agent has no LLM key to run with
 show('-- retire:', await call('POST', `/v1/agents/${id}/status`, { action: 'retire' }, t));
+show('-- withdraw still allowed after retire (expect insufficient_gas, not a status error):', await call('POST', `/v1/agents/${id}/withdraw`, { token: 'native', amount: '0.0001' }, t));
 show('-- no token:', await call('GET', '/v1/agents'));

@@ -8,6 +8,7 @@ import { createPool, type Pool } from '@odin/db';
 import { AuthService } from '../src/auth.ts';
 import { AgentService } from '../src/agents.ts';
 import { buildServer } from '../src/server.ts';
+import { FundsService } from '../src/funds.ts';
 
 // Runs only against a real, migrated Postgres: TEST_DATABASE_URL=postgresql://...
 const url = process.env.TEST_DATABASE_URL;
@@ -23,6 +24,8 @@ describe.skipIf(!url)('API (postgres, real SIWE signatures)', () => {
   const WETH = rnd();
   const TSLA = rnd();
   let clock = new Date();
+  let funds: FundsService;
+  const withdrawCalls: { agentId: string; token: Address | null; amount: bigint }[] = [];
 
   beforeAll(async () => {
     pool = createPool(url!, { max: 10 });
@@ -42,7 +45,14 @@ describe.skipIf(!url)('API (postgres, real SIWE signatures)', () => {
       wallets: { addressFor: async () => rnd() },
       registry: { addToken: async (a: string) => ({ token: { address: getAddress(a), decimals: 18, symbol: 'X', name: 'X', isStockToken: false }, routes: [] }) },
     });
-    app = buildServer({ auth, agents, setPaperBalance: async () => {}, rateLimit: { perIpPerMinute: 1000, perUserPerMinute: 1000 } });
+    funds = new FundsService({
+      pool,
+      chainId: 4663,
+      readDecimals: async () => 18,
+      executor: { executeWithdraw: async (j) => (withdrawCalls.push(j), { status: 'confirmed', txHash: '0xabc' }) },
+      exporter: { exportKey: async () => ({ address: rnd(), privateKey: '0x01' }) },
+    });
+    app = buildServer({ auth, agents, funds, setPaperBalance: async () => {}, rateLimit: { perIpPerMinute: 1000, perUserPerMinute: 1000 } });
   });
   afterAll(async () => {
     await app?.close();
@@ -135,6 +145,38 @@ describe.skipIf(!url)('API (postgres, real SIWE signatures)', () => {
 
     expect((await call('POST', `/v1/agents/${a.id}/status`, { action: 'retire' }, carol)).body).toEqual({ status: 'retired' });
     expect((await call('POST', `/v1/agents/${a.id}/status`, { action: 'resume' }, carol)).status).toBe(400);
+  });
+
+  it('funds: withdraw to the owner with step-up, export message, close-all queue; other users get 404', async () => {
+    const owner = privateKeyToAccount(generatePrivateKey());
+    clock = new Date();
+    const t = (await signIn(owner)).res.body.accessToken;
+    const other = (await signIn(privateKeyToAccount(generatePrivateKey()))).res.body.accessToken;
+    const a = (await call('POST', '/v1/agents', { name: 'funds' }, t)).body;
+
+    const w = await call('POST', `/v1/agents/${a.id}/withdraw`, { token: USDG, amount: '12.5' }, t);
+    expect(w.body).toMatchObject({ status: 'confirmed', txHash: '0xabc', recipient: owner.address, amount: '12500000' });
+    expect(withdrawCalls.at(-1)).toMatchObject({ agentId: a.id, token: USDG, amount: 12_500_000n });
+    expect((await call('POST', `/v1/agents/${a.id}/withdraw`, { token: 'native', amount: '0.1', recipient: rnd() }, t)).status).toBe(400);
+    expect((await call('POST', `/v1/agents/${a.id}/withdraw`, { token: 'native', amount: '0.1' }, other)).status).toBe(404);
+    expect(((await call('GET', `/v1/agents/${a.id}/withdrawals`, undefined, t)).body as unknown as unknown[]).length).toBe(1);
+
+    const m = (await call('POST', `/v1/agents/${a.id}/export/message`, {}, t)).body;
+    expect(m.message).toContain(`Wallet: ${getAddress(a.wallet)}`);
+    expect(m.message).toContain(`Agent: ${a.id}`);
+
+    // closing needs an active or paused agent; the request is queued for the guard watcher
+    expect((await call('POST', `/v1/agents/${a.id}/close-all`, {}, t)).body.error.code).toBe('bad_request');
+    await pool.query("UPDATE agents SET status = 'paused' WHERE id = $1", [a.id]);
+    const c = (await call('POST', `/v1/agents/${a.id}/close-all`, {}, t)).body;
+    expect(c).toMatchObject({ status: 'pending' });
+    expect((await call('GET', `/v1/agents/${a.id}/close-requests/${c.requestId}`, undefined, t)).body).toMatchObject({ status: 'pending', mode: 'paper' });
+    expect((await call('GET', `/v1/agents/${a.id}/close-requests/${c.requestId}`, undefined, other)).status).toBe(404);
+
+    // stale SIWE: money-moving actions refuse until the user signs in again
+    clock = new Date(clock.getTime() + 11 * 60_000);
+    expect((await call('POST', `/v1/agents/${a.id}/withdraw`, { token: 'native', amount: '0.1' }, t)).body.error.code).toBe('unauthorized');
+    expect((await call('POST', `/v1/agents/${a.id}/export/message`, {}, t)).body.error.code).toBe('unauthorized');
   });
 
   it('rejects unauthenticated access and malformed ids', async () => {
