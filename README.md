@@ -6,6 +6,12 @@ AI platform for Robinhood Chain. Design: [`docs/architecture.md`](docs/architect
 
 | Path | What |
 |---|---|
+| `apps/web` | Web App (Next.js): wallet sign-in, agents, portfolio, analyst, signals & alerts, notifications; httpOnly-cookie BFF |
+| `packages/notifier` | Notifier: in-app + Telegram delivery of alert events |
+| `packages/indexer` | Chain Indexer: Transfer/Swap streams with backfill and reorg handling |
+| `packages/portfolio` | Portfolio Tracker: balances, realizable value, cost basis and PnL |
+| `packages/analyst` | AI Market Analyst: tool-using chat over on-chain data |
+| `packages/signals` | Rule alerts and AI signal profiles (never trade) |
 | `apps/api` | API Service (architecture §3.2): SIWE auth, JWT + rotating refresh tokens, owner-scoped agent management; `odin-api` service |
 | `packages/shared` | Chain constants, rejection codes, Uniswap path codec, signer request schemas, untrusted-text sanitizer |
 | `packages/db` | Postgres + Timescale migrations (`migrations/*.sql`) and runner |
@@ -40,3 +46,11 @@ bash deploy/staging-e2e.sh
 ```
 
 The staging seed is generated on the host and must never be funded.
+
+## Use the staging web app
+
+The web app listens on the host's loopback only. Open an SSH tunnel and browse to http://localhost:3000:
+
+```
+ssh -L 3000:127.0.0.1:3000 ubuntu@43.156.250.129
+```
