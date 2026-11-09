@@ -11,7 +11,7 @@ const base = `http://${process.env.API_LISTEN ?? '127.0.0.1:7500'}`;
 const call = async (method: string, path: string, body?: unknown, token?: string) => {
   const r = await fetch(base + path, {
     method,
-    headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
+    headers: { ...(body === undefined ? {} : { 'content-type': 'application/json' }), ...(token ? { authorization: `Bearer ${token}` } : {}) },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   return { status: r.status, body: (await r.json()) as Record<string, any> };
