@@ -34,22 +34,39 @@ export class PgRiskStore implements RiskStore {
     const row = head.rows[0];
     if (!row || row.quote_asset === null) return null;
 
-    const tokens = await this.pool.query<{ address: string; decimals: number; is_stock_token: boolean; is_asset: boolean }>(
-      `SELECT t.address, t.decimals, t.is_stock_token, (aa.agent_id IS NOT NULL) AS is_asset
+    const tokens = await this.pool.query<{
+      address: string;
+      decimals: number;
+      is_stock_token: boolean;
+      is_asset: boolean;
+      held_live: boolean;
+      held_paper: boolean;
+    }>(
+      `SELECT t.address, t.decimals, t.is_stock_token,
+              EXISTS (SELECT 1 FROM agent_assets aa WHERE aa.agent_id = $1 AND aa.token_address = t.address) AS is_asset,
+              EXISTS (SELECT 1 FROM positions p WHERE p.agent_id = $1 AND p.token_address = t.address AND p.mode = 'live' AND p.qty > 0) AS held_live,
+              EXISTS (SELECT 1 FROM positions p WHERE p.agent_id = $1 AND p.token_address = t.address AND p.mode = 'paper' AND p.qty > 0) AS held_paper
          FROM tokens t
-         LEFT JOIN agent_assets aa ON aa.token_address = t.address AND aa.agent_id = $1
-        WHERE aa.agent_id IS NOT NULL OR t.address = $2`,
+        WHERE t.address = $2
+           OR t.address IN (SELECT token_address FROM agent_assets WHERE agent_id = $1)
+           OR t.address IN (SELECT token_address FROM positions WHERE agent_id = $1 AND qty > 0)`,
       [agentId, row.quote_asset],
     );
 
+    const quoteAsset = getAddress(row.quote_asset);
     const assets = new Set<Address>();
     const stockTokens = new Set<Address>();
     const decimals = new Map<Address, number>();
+    const held: AgentRiskContext['held'] = { live: new Set(), paper: new Set() };
     for (const t of tokens.rows) {
       const a = getAddress(t.address);
       decimals.set(a, t.decimals);
       if (t.is_asset) assets.add(a);
       if (t.is_stock_token) stockTokens.add(a);
+      // paper cash is a quote-asset position row; the quote asset is never an exit target
+      if (a === quoteAsset) continue;
+      if (t.held_live) held.live.add(a);
+      if (t.held_paper) held.paper.add(a);
     }
     const profile: RiskProfile = {
       maxPositionPct: num(row.max_position_pct),
@@ -58,7 +75,7 @@ export class PgRiskStore implements RiskStore {
       maxTradesPerDay: row.max_trades_per_day,
       maxSlippageBps: row.max_slippage_bps,
     };
-    return { agentId, status: row.status, wallet: getAddress(row.address), quoteAsset: getAddress(row.quote_asset), assets, stockTokens, decimals, profile };
+    return { agentId, status: row.status, wallet: getAddress(row.address), quoteAsset, assets, held, stockTokens, decimals, profile };
   }
 
   async route(token: Address, quote: Address): Promise<Hex | null> {

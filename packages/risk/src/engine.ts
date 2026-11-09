@@ -152,7 +152,10 @@ export class RiskEngine {
   private async routeFor(ctx: AgentRiskContext, intent: RiskIntent) {
     const token = intent.token;
     if (token === ctx.quoteAsset) throw new CheckFailed(1, 'token_not_allowed', 'cannot trade the quote asset against itself');
-    if (!ctx.assets.has(token)) throw new CheckFailed(1, 'token_not_allowed', `${token} is not in the agent's assets`);
+    // Exits of a token the agent still holds stay possible after the user removed it from its assets;
+    // buys and agent decisions always require the token to be an asset.
+    const heldExit = intent.action === 'sell' && intent.origin !== 'agent' && ctx.held[intent.mode].has(token);
+    if (!ctx.assets.has(token) && !heldExit) throw new CheckFailed(1, 'token_not_allowed', `${token} is not in the agent's assets`);
     dec(ctx, token);
     dec(ctx, ctx.quoteAsset);
 

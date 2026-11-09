@@ -44,9 +44,14 @@ export type AgentRiskContext = {
   wallet: Address;
   quoteAsset: Address;
   assets: Set<Address>;
-  /** Stock Tokens among the assets and quote asset; these get paused()/isBlocked() checks. */
+  /** Stock Tokens among the assets, held tokens and quote asset; these get paused()/isBlocked() checks. */
   stockTokens: Set<Address>;
-  /** Decimals of every asset and the quote asset. */
+  /**
+   * Tokens with an open position (qty > 0) per mode, the quote asset excluded. A guard or user exit
+   * may sell these even after the user removed them from `assets` (architecture §3.7).
+   */
+  held: Record<Mode, Set<Address>>;
+  /** Decimals of every asset, every held token and the quote asset. */
   decimals: Map<Address, number>;
   profile: RiskProfile;
 };

@@ -116,6 +116,7 @@ function ctx(over: Partial<AgentRiskContext> = {}): AgentRiskContext {
     wallet: WALLET,
     quoteAsset: USDG,
     assets: new Set([TSLA, MEME]),
+    held: { live: new Set([TSLA]), paper: new Set() },
     stockTokens: new Set([TSLA]),
     decimals: new Map(chain.decimals),
     profile: { ...NO_LIMITS },
@@ -232,6 +233,37 @@ describe('check 1 — token & route', () => {
   it('rejects tokens outside the agent assets and the quote asset itself', async () => {
     expect(rejected(await engine.evaluate(buy('1', { token: OTHER }))).code).toBe('token_not_allowed');
     expect(rejected(await engine.evaluate(buy('1', { token: USDG }))).code).toBe('token_not_allowed');
+  });
+
+  describe('exits of a held token removed from assets', () => {
+    const exit = (origin: RiskIntent['origin'], mode: Mode = 'live') => sell({ type: 'fraction_of_position', value: '1' }, { origin, mode });
+    beforeEach(() => {
+      store.ctx = ctx({ assets: new Set([MEME]) }); // TSLA removed, still held live
+    });
+
+    it('lets guard and user exits sell it', async () => {
+      const r = approved(await engine.evaluate(exit('guard')));
+      expect(r).toMatchObject({ tokenIn: TSLA, tokenOut: USDG, amountIn: 2n * E18 });
+      approved(await engine.evaluate(exit('user_close')));
+    });
+
+    it('never lets the agent trade it, in either direction', async () => {
+      expect(rejected(await engine.evaluate(exit('agent'))).code).toBe('token_not_allowed');
+      expect(rejected(await engine.evaluate(buy('1'))).code).toBe('token_not_allowed');
+    });
+
+    it('is scoped to the mode the position is held in', async () => {
+      paper.bal.set(TSLA, E18);
+      expect(rejected(await engine.evaluate(exit('guard', 'paper'))).code).toBe('token_not_allowed');
+      store.ctx = ctx({ assets: new Set([MEME]), held: { live: new Set(), paper: new Set([TSLA]) } });
+      approved(await engine.evaluate(exit('guard', 'paper')));
+      expect(rejected(await engine.evaluate(exit('guard', 'live'))).code).toBe('token_not_allowed');
+    });
+
+    it('still applies Stock Token status checks', async () => {
+      chain.paused.add(TSLA);
+      expect(rejected(await engine.evaluate(exit('guard'))).code).toBe('token_paused');
+    });
   });
 
   it('rejects tokens without a route', async () => {
