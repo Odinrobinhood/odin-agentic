@@ -67,4 +67,8 @@ post "$AT" 7402 '{}' /v1/swap | jq -c .error
 echo "-- ledger rows:"
 psql_su -d odin -c "SELECT channel, kind, count(*) FROM signer_signatures WHERE agent_id='$AGENT' GROUP BY 1,2 ORDER BY 1,2"
 echo "-- signer DB role cannot write policy tables:"
-sudo -u odin-signer psql -d odin -U odin_signer -qtAX -c "UPDATE agents SET status='active'" 2>&1 | head -1
+sudo -u odin-signer psql -d odin -U odin_signer -qtAX -c "UPDATE agents SET status='active'" 2>&1 | head -1 || true  # expected to fail
+
+echo "== executor: signer -> real mainnet RPC broadcast from the unfunded staging wallet (must be refused: insufficient_gas)"
+(cd "$APP" && sudo -u odin env $(grep -v '^#' /etc/odin/chain.env | xargs) STAGING_AGENT_ID="$AGENT" \
+  node packages/executor/scripts/staging-check.ts)

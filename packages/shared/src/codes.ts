@@ -39,6 +39,14 @@ export const REJECTION_CODES = [
   'exceeds_trades_per_day',
   'exceeds_daily_loss',
   'price_deviation',
+  // executor
+  'broadcast_failed',
+  'nonce_conflict',
+  'tx_expired',
+  'tx_reverted',
+  'tx_timeout',
+  'approve_failed',
+  'signer_unavailable',
   'internal_error',
 ] as const;
 

@@ -35,6 +35,7 @@ mk_token() { # file group
 mk_token /etc/odin/secrets/signer-agent.token odin        # readable by signer + app (agent channel)
 mk_token /etc/odin/secrets/signer-guard.token odin-guard  # readable by signer + guard watcher only
 install -m 0644 "$APP/deploy/signer.mainnet.env" /etc/odin/signer.env
+install -m 0644 "$APP/deploy/chain.mainnet.env" /etc/odin/chain.env
 
 # --- database ------------------------------------------------------------------------------------
 psql_su() { sudo -u postgres psql -qtAX "$@"; }

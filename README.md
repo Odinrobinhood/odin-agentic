@@ -10,6 +10,7 @@ AI platform for Robinhood Chain. Design: [`docs/architecture.md`](docs/architect
 | `packages/db` | Postgres + Timescale migrations (`migrations/*.sql`) and runner |
 | `packages/signer` | Isolated signer (architecture §3.8): pinned router/recipient/deadline, path validation, separate agent/guard channels and quotas |
 | `packages/risk` | Pre-trade Risk Engine (architecture §3.7): asset/route/stock checks, balance + gas reserve, optional user limits, slippage → amountOutMin, referee price sanity, guard exit rules |
+| `packages/executor` | Executor (architecture §3.9): allowance → approve → swap via the signer, ordered RPC fallback broadcast, per-wallet nonce manager, receipt + Transfer-log amounts, nonce watchdog |
 | `deploy/` | Provisioning, systemd unit, verified mainnet config, staging E2E checks |
 
 ## Develop
