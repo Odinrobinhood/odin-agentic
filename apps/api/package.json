@@ -19,6 +19,7 @@
     "@odin/portfolio": "workspace:*",
     "@odin/runtime": "workspace:*",
     "@odin/shared": "workspace:*",
+    "@odin/signals": "workspace:*",
     "fastify": "5.12.7",
     "jose": "6.2.13",
     "pg": "8.13.1",

@@ -50,6 +50,9 @@ importers:
       '@odin/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@odin/signals':
+        specifier: workspace:*
+        version: link:../../packages/signals
       fastify:
         specifier: 5.12.7
         version: 5.12.7
@@ -257,6 +260,27 @@ importers:
       zod:
         specifier: 3.23.8
         version: 3.23.8
+
+  packages/signals:
+    dependencies:
+      '@odin/db':
+        specifier: workspace:*
+        version: link:../db
+      '@odin/decision':
+        specifier: workspace:*
+        version: link:../decision
+      '@odin/shared':
+        specifier: workspace:*
+        version: link:../shared
+      pg:
+        specifier: 8.13.1
+        version: 8.13.1
+      viem:
+        specifier: 2.21.54
+        version: 2.21.54(typescript@5.8.3)(zod@3.25.76)
+      zod:
+        specifier: 3.25.76
+        version: 3.25.76
 
   packages/signer:
     dependencies:

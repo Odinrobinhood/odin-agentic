@@ -27,6 +27,22 @@ export function formatAlert(source: string, payload: Record<string, unknown>): s
       return `Trade executed${mode}: ${s(p.action)} ${short(p.token)}. In ${s(p.amountIn)}, out ${s(p.amountOut)} (raw units).`;
     case 'agent_paused':
       return `Agent paused after repeated errors: ${s(p.error, 200)}. Take-profit / stop-loss keep running.`;
+    case 'rule_alert': {
+      const spec = (p.spec ?? {}) as Record<string, unknown>;
+      const d = (p.detail ?? {}) as Record<string, unknown>;
+      const what: Record<string, string> = {
+        price_above: `price ${Number(d.price).toFixed(4)} is at or above ${s(spec.price)}`,
+        price_below: `price ${Number(d.price).toFixed(4)} is at or below ${s(spec.price)}`,
+        change_pct: `moved ${Number(d.change_pct).toFixed(2)}% in ${s(spec.minutes)} min`,
+        volume_above: `volume ${Number(d.volume).toFixed(4)} over ${s(spec.minutes)} min is above ${s(spec.amount)}`,
+        liquidity_below: `pool liquidity ${s(d.liquidity)} fell below ${s(spec.liquidity)}`,
+        large_transfer: `${s(d.count)} transfer(s) of at least ${s(spec.amount)}`,
+        wallet_activity: `${s(d.count)} new transfer(s)`,
+      };
+      return `Alert: ${short(spec.token ?? spec.pool ?? spec.address)} ${what[String(p.condition)] ?? s(p.condition)}.`;
+    }
+    case 'ai_signal':
+      return `AI signal: ${short(p.token)} ${s(p.direction)} (confidence ${Math.round(Number(p.confidence) * 100)}%). ${s(p.rationale, 240)}`;
     case 'test':
       return 'Test notification from Odin Agentic.';
     default:

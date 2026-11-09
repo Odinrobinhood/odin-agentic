@@ -74,11 +74,24 @@ show('-- watch pool address:', await call('POST', '/v1/portfolio/watch', { addre
 const pf = (await call('GET', '/v1/portfolio', undefined, t)).body;
 console.log('-- portfolio:', JSON.stringify({ valueUsdg: Math.round(pf.valueUsdg), unpriced: pf.unpriced, asOfBlock: pf.asOfBlock, wallets: pf.wallets.map((w: any) => ({ kind: w.kind, valueUsdg: Math.round(w.valueUsdg), holdings: w.holdings.map((h: any) => [h.symbol, h.valueUsdg === null ? null : Math.round(h.valueUsdg), h.historyComplete]) })) }));
 
+// signals & alerts: a price alert that must fire, wallet activity on the busy WETH/USDG pool, an AI profile
+show('-- alert price_below 100000:', await call('POST', '/v1/alerts', { rule: { condition: 'price_below', token: process.env.CHAIN_WETH, price: 100000 }, channels: [], cooldownSeconds: 3600 }, t));
+show('-- alert wallet_activity pool:', await call('POST', '/v1/alerts', { rule: { condition: 'wallet_activity', address: '0x52e65b17fb6e5ba00ed806f37afcd2daa50271ca' }, channels: [], cooldownSeconds: 60 }, t));
+show('-- bad alert (not a condition):', await call('POST', '/v1/alerts', { rule: { condition: 'buy', token: process.env.CHAIN_WETH } }, t));
+show('-- signal profile:', await call('POST', '/v1/signals/profiles', { mandate: 'Flag strong 1h momentum.', model: 'claude-sonnet-5-5', tokens: [process.env.CHAIN_WETH], cadenceSeconds: 3600, channels: [] }, t));
+await new Promise((r) => setTimeout(r, 35_000));
+const profs = (await call('GET', '/v1/signals/profiles', undefined, t)).body as unknown as { last_error: string | null; last_run_at: string | null }[];
+console.log('-- signal profile run:', JSON.stringify(profs.map((p) => ({ ran: !!p.last_run_at, last_error: p.last_error }))));
+const alerts = (await call('GET', '/v1/alerts', undefined, t)).body as unknown as { condition: string; last_fired_at: string | null }[];
+console.log('-- alerts fired:', JSON.stringify(alerts.map((a) => [a.condition, !!a.last_fired_at])));
+
 // notifications: the close-all above was queued as an alert; the notifier marks it delivered in-app
 await call('POST', '/v1/notifications/test', {}, t);
 await new Promise((r) => setTimeout(r, 5000));
-const feed = (await call('GET', '/v1/notifications?limit=5', undefined, t)).body as unknown as { payload: { event: string }; delivered_channels: string[] }[];
+const feed = (await call('GET', '/v1/notifications?limit=10', undefined, t)).body as unknown as { payload: { event: string }; delivered_channels: string[] }[];
 console.log('-- notification feed:', JSON.stringify(feed.map((f) => [f.payload.event, f.delivered_channels])));
+const ruleMsg = (await call('GET', '/v1/notifications?limit=20', undefined, t)).body as unknown as { payload: { event: string; condition?: string } }[];
+console.log('-- rule alert notifications:', JSON.stringify(ruleMsg.filter((f) => f.payload.event === 'rule_alert').map((f) => f.payload.condition)));
 
 // leave the staging scheduler clean: this agent has no LLM key to run with
 show('-- retire:', await call('POST', `/v1/agents/${id}/status`, { action: 'retire' }, t));

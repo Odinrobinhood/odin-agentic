@@ -4,6 +4,7 @@ import { getAddress, type Address, type Hex } from 'viem';
 import { Rejection, type RejectionCode } from '@odin/shared';
 import type { AuthService } from './auth.ts';
 import type { AnalystEngine, AnalystStore } from '@odin/analyst';
+import { AlertInput, AlertPatch, ProfileInput, type AlertService } from './alerts.ts';
 import { ChannelsInput, type NotificationService } from './notifications.ts';
 import { CloseAllInput, ExportInput, WithdrawInput, type FundsService } from './funds.ts';
 import { AgentService, AssetsInput, ConfigInput, GuardOverrideInput, ModeInput, PaperFundInput, RiskInput, StatusInput, TpSlInput } from './agents.ts';
@@ -14,6 +15,7 @@ export type ApiDeps = {
   funds: FundsService;
   notifications: NotificationService;
   analyst: { engine: AnalystEngine; store: AnalystStore };
+  alerts: AlertService;
   portfolio: { forUser(userId: string): Promise<unknown>; wallet(address: Address, kind?: string, label?: string | null): Promise<unknown> };
   pool: { query: (sql: string, params?: unknown[]) => Promise<{ rowCount: number | null; rows: any[] }> };
   setPaperBalance: (agentId: string, quote: Address, raw: bigint) => Promise<void>;
@@ -144,6 +146,23 @@ export function buildServer(d: ApiDeps): FastifyInstance {
   app.get('/v1/agents/:id/decisions', { preHandler: authed }, async (req) => json(await d.agents.decisions(uid(req), aid(req), Number((req.query as { limit?: string }).limit ?? 50))));
   app.get('/v1/agents/:id/positions', { preHandler: authed }, async (req) => json(await d.agents.positions(uid(req), aid(req))));
   app.get('/v1/agents/:id/executions', { preHandler: authed }, async (req) => json(await d.agents.executions(uid(req), aid(req), Number((req.query as { limit?: string }).limit ?? 50))));
+
+  // ── signals & alerts (architecture §3.14): information only, never trades ──────────────────────────
+  const pid = (req: FastifyRequest) => (req.params as { pid: string }).pid;
+  app.get('/v1/alerts', { preHandler: authed }, async (req) => json(await d.alerts.list(uid(req))));
+  app.post('/v1/alerts', { preHandler: authed }, async (req) => d.alerts.create(uid(req), parse(AlertInput, req.body)));
+  app.patch('/v1/alerts/:pid', { preHandler: authed }, async (req) => {
+    await d.alerts.patch(uid(req), pid(req), parse(AlertPatch, req.body));
+    return { ok: true };
+  });
+  app.delete('/v1/alerts/:pid', { preHandler: authed }, async (req) => {
+    await d.alerts.remove(uid(req), pid(req));
+    return { ok: true };
+  });
+  app.get('/v1/signals/profiles', { preHandler: authed }, async (req) => json(await d.alerts.profiles(uid(req))));
+  app.post('/v1/signals/profiles', { preHandler: authed }, async (req) => d.alerts.saveProfile(uid(req), parse(ProfileInput, req.body)));
+  app.put('/v1/signals/profiles/:pid', { preHandler: authed }, async (req) => d.alerts.saveProfile(uid(req), parse(ProfileInput, req.body), pid(req)));
+  app.get('/v1/signals', { preHandler: authed }, async (req) => json(await d.alerts.signals(uid(req), Number((req.query as { limit?: string }).limit ?? 50))));
 
   // ── analyst (architecture §3.13): read-only, answers only from on-chain tools ───────────────────────
   const conv = async (req: FastifyRequest) => {

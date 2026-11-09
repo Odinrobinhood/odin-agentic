@@ -41,7 +41,9 @@ export class Notifier {
       const errors: string[] = [];
       if (a.userId) {
         const text = formatAlert(a.source, a.payload);
-        for (const ch of await this.store.channels(a.userId)) {
+        // per-alert channel override (architecture §3.11): in-app always, external only if listed
+        const only = Array.isArray(a.payload.channels) ? new Set((a.payload.channels as unknown[]).map(String)) : null;
+        for (const ch of (await this.store.channels(a.userId)).filter((c) => !only || only.has(c.kind))) {
           const sender = this.senders.get(ch.kind);
           if (!sender) {
             errors.push(`${ch.kind}: not configured on this server`);

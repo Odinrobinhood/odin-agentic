@@ -10,6 +10,7 @@ import { AgentService } from './agents.ts';
 import { buildServer } from './server.ts';
 import { FundsService } from './funds.ts';
 import { NotificationService } from './notifications.ts';
+import { AlertService } from './alerts.ts';
 import { PortfolioService, ViemPortfolioChain } from '@odin/portfolio';
 import Anthropic from '@anthropic-ai/sdk';
 import { AnalystEngine, AnalystStore, AnalystTools, ClaudeAnalystLLM } from '@odin/analyst';
@@ -102,6 +103,7 @@ const app = buildServer({
   pool,
   portfolio,
   analyst,
+  alerts: new AlertService(pool),
   auth, agents, funds, notifications: new NotificationService(pool), setPaperBalance: (a, q, raw) => runtimeStore.setPaperBalance(a, q, raw) });
 const [host, port] = (process.env.API_LISTEN ?? '127.0.0.1:7500').split(':');
 await app.listen({ host: host!, port: Number(port) });

@@ -110,7 +110,8 @@ export type DecideResult =
 export interface DecisionProvider {
   readonly name: string;
   supports(model: string): boolean;
-  complete(req: { system: string; user: string; model: string; maxTokens: number }): Promise<{
+  /** `schema` overrides the structured-output schema (default: the decision schema). */
+  complete(req: { system: string; user: string; model: string; maxTokens: number; schema?: Record<string, unknown> }): Promise<{
     text: string | null;
     stopReason: string | null;
     model: string;

@@ -23,7 +23,7 @@ export class ClaudeProvider implements DecisionProvider {
     return (CLAUDE_MODELS as readonly string[]).includes(model);
   }
 
-  async complete(req: { system: string; user: string; model: string; maxTokens: number }) {
+  async complete(req: { system: string; user: string; model: string; maxTokens: number; schema?: Record<string, unknown> }) {
     // Haiku has no server-side fallback; on Opus/Sonnet a refusal is re-run on Anthropic's recommended model
     const fallback = req.model === 'claude-haiku-5-5' ? {} : { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const };
     const response = await this.client.beta.messages.create({
@@ -32,7 +32,7 @@ export class ClaudeProvider implements DecisionProvider {
       system: [{ type: 'text', text: req.system, cache_control: { type: 'ephemeral' } }],
       messages: [{ role: 'user', content: req.user }],
       thinking: { type: 'adaptive' },
-      output_config: { effort: this.effort, format: { type: 'json_schema', schema: DECISION_JSON_SCHEMA } },
+      output_config: { effort: this.effort, format: { type: 'json_schema', schema: req.schema ?? DECISION_JSON_SCHEMA } },
       ...fallback,
     });
 

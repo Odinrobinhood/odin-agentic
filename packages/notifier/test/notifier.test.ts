@@ -57,6 +57,21 @@ describe('Notifier', () => {
     expect(s2.alerts[0]).toMatchObject({ delivered: ['in_app'], error: 'telegram: not configured on this server' });
   });
 
+  it('honours a per-alert channel override (in-app always)', async () => {
+    const store = new MemStore();
+    const tg = new FakeTelegram();
+    store.alerts.push({ id: 'a', userId: 'u', source: 'rule', attempts: 0, payload: { event: 'test', channels: [] } });
+    store.chans.set('u', [{ kind: 'telegram', target: '1' }]);
+    await new Notifier(store, [tg]).deliverOnce();
+    expect(tg.sent).toHaveLength(0);
+    expect(store.alerts[0]!.delivered).toEqual(['in_app']);
+  });
+
+  it('formats rule alerts and AI signals', () => {
+    expect(formatAlert('rule', { event: 'rule_alert', condition: 'price_below', spec: { token: '0x0bd7d308f8e1639fab988df18a8011f41eacad73', price: 2000 }, detail: { price: 1999.5 } })).toBe('Alert: 0x0bd7…ad73 price 1999.5000 is at or below 2000.');
+    expect(formatAlert('signal', { event: 'ai_signal', token: 'X', direction: 'bullish', confidence: 0.72, rationale: 'momentum' })).toBe('AI signal: X bullish (confidence 72%). momentum');
+  });
+
   it('formats failures and close-all results; on-chain text cannot inject control characters', () => {
     expect(formatAlert('guard', { event: 'guard_exit_failed', type: 'take_profit', token: 'X', code: 'price_deviation', message: 'pool off‮ referee\n', attempt: 3 })).toBe(
       'Take profit for X could not execute (price_deviation): pool off referee. It stays armed and will retry (attempt 3).',
