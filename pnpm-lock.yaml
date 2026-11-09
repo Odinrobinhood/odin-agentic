@@ -63,6 +63,30 @@ importers:
         specifier: 2.21.54
         version: 2.21.54(typescript@5.8.3)(zod@3.25.76)
 
+  packages/guard:
+    dependencies:
+      '@odin/db':
+        specifier: workspace:*
+        version: link:../db
+      '@odin/executor':
+        specifier: workspace:*
+        version: link:../executor
+      '@odin/risk':
+        specifier: workspace:*
+        version: link:../risk
+      '@odin/runtime':
+        specifier: workspace:*
+        version: link:../runtime
+      '@odin/shared':
+        specifier: workspace:*
+        version: link:../shared
+      pg:
+        specifier: 8.13.1
+        version: 8.13.1
+      viem:
+        specifier: 2.21.54
+        version: 2.21.54(typescript@5.8.3)(zod@3.25.76)
+
   packages/market:
     dependencies:
       '@odin/db':

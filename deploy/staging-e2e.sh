@@ -82,6 +82,15 @@ echo "== runtime: paper ticks with a scripted decision provider (real risk engin
 (cd "$APP" && sudo -u odin env $(grep -v '^#' /etc/odin/chain.env | xargs) STAGING_AGENT_ID="$AGENT" \
   node packages/runtime/scripts/staging-tick.ts)
 
+echo "== guard watcher (as odin-guard): stop loss fires on the paper position at the real realizable price"
+systemctl stop odin-guard  # avoid racing the running watcher
+(cd "$APP" && sudo -u odin-guard env $(grep -v '^#' /etc/odin/chain.env | xargs) STAGING_AGENT_ID="$AGENT" \
+  node packages/guard/scripts/staging-guard.ts)
+systemctl start odin-guard
+echo "-- isolation: odin cannot read the guard token, odin-guard cannot read the agent token:"
+sudo -u odin cat /etc/odin/secrets/signer-guard.token >/dev/null 2>&1 && echo "FAIL odin read guard token" || echo "ok"
+sudo -u odin-guard cat /etc/odin/secrets/signer-agent.token >/dev/null 2>&1 && echo "FAIL odin-guard read agent token" || echo "ok"
+
 echo "== executor: signer -> real mainnet RPC broadcast from the unfunded staging wallet (must be refused: insufficient_gas)"
 (cd "$APP" && sudo -u odin env $(grep -v '^#' /etc/odin/chain.env | xargs) STAGING_AGENT_ID="$AGENT" \
   node packages/executor/scripts/staging-check.ts)

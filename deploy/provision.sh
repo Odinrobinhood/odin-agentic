@@ -41,6 +41,7 @@ install -m 0644 "$APP/deploy/chain.mainnet.env" /etc/odin/chain.env
 psql_su() { sudo -u postgres psql -qtAX "$@"; }
 psql_su -c "SELECT 1 FROM pg_roles WHERE rolname='odin'"        | grep -q 1 || psql_su -c "CREATE ROLE odin LOGIN"
 psql_su -c "SELECT 1 FROM pg_roles WHERE rolname='odin_signer'" | grep -q 1 || psql_su -c "CREATE ROLE odin_signer LOGIN"
+psql_su -c "SELECT 1 FROM pg_roles WHERE rolname='odin_guard'"  | grep -q 1 || psql_su -c "CREATE ROLE odin_guard LOGIN"
 psql_su -c "SELECT 1 FROM pg_database WHERE datname='odin'"     | grep -q 1 || psql_su -c "CREATE DATABASE odin OWNER odin"
 psql_su -d odin -c "CREATE EXTENSION IF NOT EXISTS timescaledb; CREATE EXTENSION IF NOT EXISTS pgcrypto;"
 
@@ -49,6 +50,11 @@ PGDIR=$(dirname "$(psql_su -c 'SHOW hba_file')")
 grep -q '^odinsigner ' "$PGDIR/pg_ident.conf" || echo 'odinsigner odin-signer odin_signer' >> "$PGDIR/pg_ident.conf"
 if ! grep -q 'map=odinsigner' "$PGDIR/pg_hba.conf"; then
   sed -i '0,/^local/s//local   odin   odin_signer   peer map=odinsigner\nlocal/' "$PGDIR/pg_hba.conf"
+fi
+# OS user odin-guard -> DB role odin_guard (guard watcher)
+grep -q '^odinguard ' "$PGDIR/pg_ident.conf" || echo 'odinguard odin-guard odin_guard' >> "$PGDIR/pg_ident.conf"
+if ! grep -q 'map=odinguard' "$PGDIR/pg_hba.conf"; then
+  sed -i '0,/^local/s//local   odin   odin_guard    peer map=odinguard\nlocal/' "$PGDIR/pg_hba.conf"
 fi
 systemctl reload postgresql
 
@@ -69,6 +75,14 @@ systemctl enable odin-market >/dev/null 2>&1
 systemctl restart odin-market
 sleep 5
 systemctl --no-pager --lines=4 status odin-market || true
+
+# --- guard watcher (OS user odin-guard: guard channel token + odin_guard DB role) ----------------
+install -m 0644 "$APP/deploy/odin-guard.service" /etc/systemd/system/odin-guard.service
+systemctl daemon-reload
+systemctl enable odin-guard >/dev/null 2>&1
+systemctl restart odin-guard
+sleep 3
+systemctl --no-pager --lines=3 status odin-guard || true
 
 # --- agent runtime (needs ANTHROPIC_API_KEY=... in /etc/odin/secrets/anthropic.env, mode 0440 root:odin) --------
 install -m 0644 "$APP/deploy/odin-runtime.service" /etc/systemd/system/odin-runtime.service

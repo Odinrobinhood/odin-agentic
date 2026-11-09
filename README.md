@@ -14,6 +14,7 @@ AI platform for Robinhood Chain. Design: [`docs/architecture.md`](docs/architect
 | `packages/market` | Market Data (architecture §3.6): token registry, routing to USDG/WETH, minute USDG price snapshots; `odin-market` service |
 | `packages/decision` | Decision Engine (architecture §3.5): provider interface, Claude provider with structured output, prompt with untrusted data blocks, daily token meter |
 | `packages/runtime` | Agent Runtime + Scheduler (architecture §3.3–3.4): tick flow, paper mode, positions + TP/SL arming, leased scheduling; `odin-runtime` service |
+| `packages/guard` | Guard Watcher (architecture §3.10): realizable-price TP/SL monitoring, guard-channel exits, retries + alerts; `odin-guard` service (own OS user and DB role) |
 | `deploy/` | Provisioning, systemd unit, verified mainnet config, staging E2E checks |
 
 ## Develop
