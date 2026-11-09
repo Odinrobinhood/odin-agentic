@@ -120,7 +120,7 @@ export class AgentService {
     await this.owned(userId, agentId);
     const [a, cfg, assets, risk, tpsl] = await Promise.all([
       this.d.pool.query(`SELECT a.id, a.name, a.status, a.mode, a.created_at, w.address AS wallet, w.custody, w.exported_at FROM agents a JOIN agent_wallets w ON w.agent_id = a.id WHERE a.id = $1`, [agentId]),
-      this.d.pool.query(`SELECT * FROM agent_configs WHERE agent_id = $1 ORDER BY version DESC LIMIT 1`, [agentId]),
+      this.d.pool.query(`SELECT c.*, t.symbol AS quote_symbol FROM agent_configs c LEFT JOIN tokens t ON t.address = c.quote_asset WHERE c.agent_id = $1 ORDER BY c.version DESC LIMIT 1`, [agentId]),
       this.d.pool.query(`SELECT t.address, t.symbol, t.name, t.decimals, t.is_stock_token FROM agent_assets aa JOIN tokens t ON t.address = aa.token_address WHERE aa.agent_id = $1 ORDER BY t.symbol`, [agentId]),
       this.d.pool.query(`SELECT * FROM risk_profiles WHERE agent_id = $1`, [agentId]),
       this.d.pool.query(`SELECT * FROM tp_sl_defaults WHERE agent_id = $1`, [agentId]),

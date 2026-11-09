@@ -1,0 +1,33 @@
+[Unit]
+Description=Odin Agentic web app (Next.js, loopback only)
+After=network-online.target odin-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=odin
+Group=odin
+EnvironmentFile=/etc/odin/chain.env
+Environment=API_URL=http://127.0.0.1:7500 WEB_ORIGIN=http://localhost:3000 NEXT_TELEMETRY_DISABLED=1
+WorkingDirectory=/opt/odin/app/apps/web
+ExecStart=/usr/bin/node node_modules/next/dist/bin/next start -p 3000 -H 127.0.0.1
+ReadWritePaths=/opt/odin/app/apps/web/.next/cache
+Restart=on-failure
+RestartSec=3
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+CapabilityBoundingSet=
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

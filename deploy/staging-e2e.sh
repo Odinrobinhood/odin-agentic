@@ -106,6 +106,10 @@ psql_su -d odin -c "SELECT (SELECT count(*) FROM transfers) AS transfers, (SELEC
 echo "== analyst tools on real data (scripted model, no LLM key needed)"
 (cd "$APP" && sudo -u odin env $(grep -v '^#' /etc/odin/chain.env | xargs) node packages/analyst/scripts/staging-analyst.ts)
 
+echo "== web app BFF: SIWE via httpOnly cookies, CSRF header, security headers"
+sleep 3
+(cd "$APP/apps/web" && sudo -u odin node scripts/staging-web.mjs)
+
 echo "== executor: signer -> real mainnet RPC broadcast from the unfunded staging wallet (must be refused: insufficient_gas)"
 (cd "$APP" && sudo -u odin env $(grep -v '^#' /etc/odin/chain.env | xargs) STAGING_AGENT_ID="$AGENT" \
   node packages/executor/scripts/staging-check.ts)

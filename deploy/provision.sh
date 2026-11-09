@@ -15,7 +15,10 @@ chmod 0711 /opt/odin
 rm -rf "$APP.new" && mkdir -p "$APP.new"
 tar -xzf "$TARBALL" -C "$APP.new"
 (cd "$APP.new" && CI=1 pnpm install --frozen-lockfile --silent)
+(cd "$APP.new/apps/web" && NEXT_TELEMETRY_DISABLED=1 node node_modules/next/dist/bin/next build >/tmp/odin-web-build.log 2>&1) || { tail -30 /tmp/odin-web-build.log; exit 1; }
 chown -R root:root "$APP.new" && chmod -R go-w "$APP.new"
+# the only writable path in the code tree: Next.js runtime cache
+install -d -o odin -g odin -m 0700 "$APP.new/apps/web/.next/cache"
 rm -rf "$APP.old"; [ -d "$APP" ] && mv "$APP" "$APP.old"; mv "$APP.new" "$APP"
 
 # --- secrets -------------------------------------------------------------------------------------
@@ -106,6 +109,12 @@ install -m 0644 "$APP/deploy/odin-signals.service" /etc/systemd/system/odin-sign
 systemctl daemon-reload
 systemctl enable odin-signals >/dev/null 2>&1
 systemctl restart odin-signals
+
+# --- web app (loopback only; reach it with: ssh -L 3000:127.0.0.1:3000 ubuntu@<host>) --------------
+install -m 0644 "$APP/deploy/odin-web.service" /etc/systemd/system/odin-web.service
+systemctl daemon-reload
+systemctl enable odin-web >/dev/null 2>&1
+systemctl restart odin-web
 
 # --- guard watcher (OS user odin-guard: guard channel token + odin_guard DB role) ----------------
 install -m 0644 "$APP/deploy/odin-guard.service" /etc/systemd/system/odin-guard.service
