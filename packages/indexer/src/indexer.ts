@@ -109,14 +109,42 @@ export class Indexer {
     return (await this.chain.block(s.lastBlock)).hash !== s.lastBlockHash;
   }
 
+  /**
+   * Block times from headers sampled every SAMPLE blocks (shared across streams), linearly interpolated in
+   * between: at ~10 blocks/s the error is a few seconds, well below the minute price snapshots it is
+   * joined with, and it needs ~2% of the header reads.
+   */
   private async blockTimes(blocks: bigint[]): Promise<Map<bigint, Date>> {
     const out = new Map<bigint, Date>();
-    for (let i = 0; i < blocks.length; i += 100) {
-      const part = blocks.slice(i, i + 100);
+    const samples = new Set<bigint>();
+    for (const b of blocks) {
+      const lo = (b / SAMPLE) * SAMPLE;
+      samples.add(lo);
+      if (lo !== b) samples.add(lo + SAMPLE);
+    }
+    const missing = [...samples].filter((s) => !this.sampleCache.has(s));
+    for (let i = 0; i < missing.length; i += 100) {
+      const part = missing.slice(i, i + 100);
       const got = await Promise.all(part.map((b) => this.chain.block(b)));
-      part.forEach((b, k) => out.set(b, new Date(Number(got[k]!.timestamp) * 1000)));
+      part.forEach((b, k) => this.sampleCache.set(b, Number(got[k]!.timestamp)));
+    }
+    if (this.sampleCache.size > 20_000) for (const k of [...this.sampleCache.keys()].slice(0, 10_000)) this.sampleCache.delete(k);
+    for (const b of blocks) {
+      const lo = (b / SAMPLE) * SAMPLE;
+      const tLo = this.sampleCache.get(lo)!;
+      if (lo === b) {
+        out.set(b, new Date(tLo * 1000));
+        continue;
+      }
+      const tHi = this.sampleCache.get(lo + SAMPLE)!;
+      const t = tLo + ((tHi - tLo) * Number(b - lo)) / Number(SAMPLE);
+      out.set(b, new Date(Math.round(t * 1000)));
     }
     return out;
   }
+
+  private readonly sampleCache = new Map<bigint, number>();
 }
+
+const SAMPLE = 50n;
 
