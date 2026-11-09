@@ -104,6 +104,10 @@ export class Signer {
     // guards keep protecting paused agents; the agent itself can only act while active
     const allowed = channel === 'guard' ? p.status === 'active' || p.status === 'paused' : p.status === 'active';
     if (!allowed) throw new Rejection('agent_not_active', `agent status ${p.status} cannot sign on ${channel} channel`);
+    // base assets are only USDG and ETH (as WETH) on Robinhood Chain
+    if (p.quoteAsset !== this.d.config.usdg && p.quoteAsset !== this.d.config.weth) {
+      throw new Rejection('quote_not_allowed', 'agent quote asset must be USDG or WETH');
+    }
     return p;
   }
 

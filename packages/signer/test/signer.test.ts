@@ -257,6 +257,14 @@ describe('agent status and channels', () => {
     await rejects(signer.swap(swapReq(sellTsla), 'agent'), 'unknown_agent');
   });
 
+  it('only USDG or WETH may be an agent quote asset, on every channel', async () => {
+    policies.policy = makePolicy({ quoteAsset: MEME, assets: new Set([TSLA]) });
+    await rejects(signer.swap(swapReq(buyTsla), 'agent'), 'quote_not_allowed');
+    await rejects(signer.swap(swapReq(sellTsla), 'guard'), 'quote_not_allowed');
+    policies.policy = makePolicy({ quoteAsset: WETH, assets: new Set([MEME]) });
+    await expect(signer.swap(swapReq(encodePath([WETH, MEME], [3000])), 'agent')).resolves.toBeTruthy();
+  });
+
   it('a paused agent cannot trade, but its guards can still exit', async () => {
     policies.policy = makePolicy({ status: 'paused' });
     await rejects(signer.swap(swapReq(buyTsla), 'agent'), 'agent_not_active');

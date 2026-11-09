@@ -12,6 +12,7 @@ export const REJECTION_CODES = [
   'agent_retired',
   // token & route
   'token_not_allowed',
+  'quote_not_allowed',
   'invalid_path',
   'bad_fee_tier',
   'intermediate_not_allowed',

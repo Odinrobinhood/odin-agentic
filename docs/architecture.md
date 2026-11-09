@@ -13,7 +13,8 @@
 | Aspect | Decision |
 |---|---|
 | Chain | Robinhood Chain mainnet (Arbitrum Orbit L2, chain ID `4663`, testnet `46630`), gas paid in ETH |
-| Assets | Any token on Robinhood Chain (Stock Tokens or any other ERC-20) that has a pool, chosen by the user. Robinhood Chain only |
+| Base assets | **Only ETH and USDG on Robinhood Chain.** Deposits and each agent's `quote_asset` are USDG or ETH (held as WETH for trading); native ETH is gas only |
+| Tradable assets | Any token on Robinhood Chain (Stock Tokens or any other ERC-20) that has a pool, chosen by the user, bought and sold against the base asset. Robinhood Chain only |
 | Venue | Uniswap v3 pools on Robinhood Chain via `SwapRouter02` |
 | Product model | Personal bot per user; no marketplace, no copy-trading between users |
 | Utilities | AI Trading Agent, AI Market Analyst, AI Signals & Alerts, Portfolio Tracker — all on Robinhood Chain only |
@@ -108,7 +109,7 @@
   | `model` | Choice among supported providers |
   | `temperature`, `max_tokens` | Model parameters |
   | `assets` | Tokens the agent may trade: any ERC-20 contract address on Robinhood Chain (Stock Tokens, memecoins, stablecoins, etc.), added by the user via search or by pasting an address |
-  | `quote_asset` | The agent's base asset (e.g. USDG or WETH) |
+  | `quote_asset` | The agent's base asset: **USDG or WETH only** (WETH is shown to users as ETH). Enforced by the API and again by the signer (`quote_not_allowed`) |
   | `context_inputs` | Data injected into the prompt: price, N-period candles, positions, decision history, etc. |
   | `cadence_seconds` | How often the agent thinks (technical floor 60 seconds) |
   | `triggers` (optional) | Price conditions that wake the agent outside its cadence |
@@ -294,7 +295,7 @@ Scheduler ──tick(agent)──▶ Agent Runtime
 ## 6. Custody & security
 
 - **Default**: agent wallets are created by the platform (custodial), derived from the master seed, and **exportable by the user at any time**.
-- Users deposit USDG + a small amount of ETH (gas) to the agent wallet address; withdrawals go only to the user's SIWE wallet.
+- Users deposit only Robinhood Chain assets: native ETH for gas, plus trading capital in the agent's base asset — USDG, or WETH for an ETH-based agent (native ETH is not traded; Uniswap v3 pools only hold WETH). Withdrawals go only to the user's SIWE wallet.
 - The master seed is stored as a file (`0400`, dir `0700`) on the signer host, encrypted via KMS/secret store before any real user funds arrive. Never in env vars, never in the database.
 - The seed is not rotated after wallets are funded (that would strand funds at the old addresses).
 - All services bind to `127.0.0.1`; only the reverse proxy (nginx/Caddy + TLS) is public.
