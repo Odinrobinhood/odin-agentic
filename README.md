@@ -6,6 +6,7 @@ AI platform for Robinhood Chain. Design: [`docs/architecture.md`](docs/architect
 
 | Path | What |
 |---|---|
+| `apps/api` | API Service (architecture §3.2): SIWE auth, JWT + rotating refresh tokens, owner-scoped agent management; `odin-api` service |
 | `packages/shared` | Chain constants, rejection codes, Uniswap path codec, signer request schemas, untrusted-text sanitizer |
 | `packages/db` | Postgres + Timescale migrations (`migrations/*.sql`) and runner |
 | `packages/signer` | Isolated signer (architecture §3.8): pinned router/recipient/deadline, path validation, separate agent/guard channels and quotas |
