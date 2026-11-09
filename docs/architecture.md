@@ -163,7 +163,8 @@ Every rejection has a `code` (e.g. `exceeds_position_limit`, `token_paused`, `pr
   - 1–3 hops; every fee tier is a valid Uniswap v3 tier.
   - The first token is the token being sold and the last is the token being bought; one of them is in the agent's `assets` and the other is the agent's `quote_asset` or another asset of the agent.
   - Intermediate tokens may only be USDG or WETH (pinned addresses in signer config).
-  - Every hop's pool address is computed from the pinned factory (`CREATE2`) and must exist with non-zero liquidity — no pool can be named directly.
+  - Every hop's pool is resolved by the signer itself from the pinned factory (`getPool(tokenIn, tokenOut, fee)`) and must exist with non-zero liquidity — no pool can be named directly.
+  - Every chain read the signer depends on fails closed (`chain_read_failed`).
 - `approve` token must be the first token of a swap the agent may perform; amount ≤ the pending swap's `amountIn` (approvals are sized to the trade, so the "unlimited" idiom is rejected by construction).
 - Chain ID pinned to `4663`; the signer refuses to sign for any other chain.
 - Per-agent daily signature cap, recorded atomically **before** the signature is returned. Guard-originated intents are signed with a flag set by the Guard Watcher's own authenticated channel (not by the API) and draw from a **separate reserved guard quota** (enough to close every open position at least 3 times per day), so an agent that exhausted its cap can always still be exited.
@@ -305,6 +306,8 @@ Scheduler ──tick(agent)──▶ Agent Runtime
 
 | Item | Notes |
 |---|---|
+| Verified mainnet addresses (2026-11-09) | SwapRouter02 `0xcaf681a66d020601342297493863e78c959e5cb2` (`factory()` read on-chain), UniswapV3Factory `0x1f7d7550b1b028f7571e69a784071f0205fd2efa`, WETH `0x0bd7d308f8e1639fab988df18a8011f41eacad73` (`router.WETH9()`), USDG `0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168` (Paxos docs). Source of truth: `deploy/signer.mainnet.env` |
+| Testnet | Uniswap v3 is **not** deployed on testnet `46630` (router and factory have no code there). Staging therefore runs the read/sign path against mainnet with an unfunded staging seed; nothing is broadcast. See §11.6 |
 | RPC | At least 2–4 endpoints, ordered fallback; preflight both `eth_chainId` **and** `eth_call` (some providers answer the first but reject the second) |
 | Router | `SwapRouter02` — address pinned in signer config; verify `factory()` matches the pools' factory at signer startup and refuse to start on mismatch |
 | Stock Tokens | Beacon proxy; monitor `implementation()` periodically. Check `paused()` & `isBlocked(address)` on every signature |
@@ -375,3 +378,5 @@ Everything below must be live with real money and real data on mainnet before la
 3. Who pays for LLM tokens (user directly, per-tier quota, or paid in tokens).
 4. Role of the $ODIN token: access gating, tier limits, or paying LLM costs.
 5. Regional restrictions (Stock Tokens have jurisdictional restrictions).
+6. Testnet staging: deploy our own Uniswap v3 stack on `46630` for full broadcast tests, or keep staging on mainnet reads + small-fund mainnet E2E (§10).
+7. Backend language: decided — TypeScript monorepo (pnpm), Node ≥ 22.18 running `.ts` directly via type stripping.

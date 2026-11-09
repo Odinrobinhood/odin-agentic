@@ -162,6 +162,14 @@ describe('swap', () => {
     expect(ledger.rows[0]!.txHash).toBe(out.txHash);
   });
 
+  it('re-signing a byte-identical approve is idempotent', async () => {
+    const r = { agentId: AGENT_ID, swap: { path: sellTsla, amountIn: '5' }, gasParams: gas };
+    const one = await signer.approve(r, 'agent');
+    const two = await signer.approve(r, 'agent');
+    expect(two.txHash).toBe(one.txHash);
+    expect(ledger.rows).toHaveLength(1);
+  });
+
   it('allows multi-hop through WETH', async () => {
     await expect(signer.swap(swapReq(encodePath([USDG, WETH, MEME], [500, 3000])), 'agent')).resolves.toBeTruthy();
   });

@@ -36,6 +36,12 @@ export class PgLedger implements Ledger {
       await client.query('BEGIN');
       // serialise all signatures of one agent+channel so the count cannot race
       await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`${e.agentId}:${e.channel}`]);
+      // re-signing byte-identical tx data yields the same hash: idempotent, not a new signature
+      const seen = await client.query('SELECT 1 FROM signer_signatures WHERE tx_hash = $1 AND agent_id = $2', [e.txHash, e.agentId]);
+      if (seen.rowCount) {
+        await client.query('COMMIT');
+        return;
+      }
       const day = utcDay(now);
       const used = await client.query<{ n: string }>(
         'SELECT count(*) AS n FROM signer_signatures WHERE agent_id = $1 AND channel = $2 AND day = $3',
@@ -61,10 +67,10 @@ export class PgLedger implements Ledger {
 export class MemoryLedger implements Ledger {
   readonly rows: (LedgerEntry & { day: string })[] = [];
   async record(e: LedgerEntry, now: Date): Promise<void> {
+    if (this.rows.some((r) => r.txHash === e.txHash && r.agentId === e.agentId)) return;
     const day = utcDay(now);
     const used = this.rows.filter((r) => r.agentId === e.agentId && r.channel === e.channel && r.day === day).length;
     if (used >= e.cap) throw new Rejection('signature_cap_reached', `${e.channel} signature cap of ${e.cap}/day reached`);
-    if (this.rows.some((r) => r.txHash === e.txHash)) throw new Error('duplicate tx hash');
     this.rows.push({ ...e, day });
   }
 }

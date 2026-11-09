@@ -64,6 +64,11 @@ export class Signer {
     if (f !== this.d.config.factory) throw new Rejection('chain_mismatch', `router factory ${f} != pinned factory ${this.d.config.factory}`);
   }
 
+  /** Public address for a derivation index, so the API can record a new agent wallet without the seed. */
+  addressFor(derivationIndex: bigint): Address {
+    return privateKeyToAccount(deriveAgentKey(this.d.seed, derivationIndex)).address;
+  }
+
   async approve(req: ApproveRequest, channel: Channel): Promise<SignedIntent> {
     const policy = await this.policy(req.agentId, channel);
     const amountIn = parseAmount(req.swap.amountIn);

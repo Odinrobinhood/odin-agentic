@@ -1,10 +1,12 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { timingSafeEqual, createHash } from 'node:crypto';
+import { z } from 'zod';
 import { ApproveRequest, Rejection, SwapRequest } from '@odin/shared';
 import type { Channel } from './ledger.ts';
 import type { Signer } from './signer.ts';
 
 const MAX_BODY = 16 * 1024;
+const WalletRequest = z.object({ derivationIndex: z.string().regex(/^[0-9]{1,18}$/) }).strict();
 
 function sameSecret(a: string, b: string): boolean {
   const ha = createHash('sha256').update(a).digest();
@@ -55,6 +57,10 @@ export function createChannelServer(signer: Signer, channel: Channel, token: str
         const parsed = SwapRequest.safeParse(body);
         if (!parsed.success) throw new Rejection('bad_request', parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '));
         result = await signer.swap(parsed.data, channel);
+      } else if (req.url === '/v1/wallet' && channel === 'agent') {
+        const parsed = WalletRequest.safeParse(body);
+        if (!parsed.success) throw new Rejection('bad_request', 'derivationIndex must be a non-negative integer string');
+        return send(res, 200, { address: signer.addressFor(BigInt(parsed.data.derivationIndex)) });
       } else {
         return send(res, 404, { error: { code: 'bad_request', message: 'unknown route' } });
       }
