@@ -100,7 +100,7 @@ class FakeBalances implements BalanceReader {
   }
 }
 
-const config: RiskConfig = { gasReserveWei: 10n ** 15n, defaultSlippageBps: 100, priceToleranceBps: 300 };
+const config: RiskConfig = { usdg: USDG, weth: WETH, gasReserveWei: 10n ** 15n, defaultSlippageBps: 100, priceToleranceBps: 300 };
 
 let store: FakeStore;
 let chain: FakeChain;
@@ -207,6 +207,12 @@ describe('agent state', () => {
     expect(rejected(await engine.evaluate(sell({ type: 'fraction_of_position', value: '1' }, { origin: 'guard' }))).code).toBe('agent_retired');
     store.ctx = ctx({ status: 'paused' });
     expect(rejected(await engine.evaluate(buy('1'))).code).toBe('agent_not_active');
+  });
+
+  it('rejects agents whose quote asset is not USDG or WETH, on every origin', async () => {
+    store.ctx = ctx({ quoteAsset: MEME, assets: new Set([TSLA]) });
+    expect(rejected(await engine.evaluate(buy('1')))).toMatchObject({ code: 'quote_not_allowed', check: 0 });
+    expect(rejected(await engine.evaluate(sell({ type: 'fraction_of_position', value: '1' }, { origin: 'guard' }))).code).toBe('quote_not_allowed');
   });
 
   it('lets guards and user exits sell for paused agents', async () => {

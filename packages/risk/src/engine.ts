@@ -4,6 +4,9 @@ import type { BalanceReader, RiskChain, RiskStore } from './ports.ts';
 import type { AgentRiskContext, Mode, RiskApproved, RiskIntent, RiskRejected, RiskResult } from './types.ts';
 
 export type RiskConfig = {
+  /** Pinned base assets: an agent quote asset must be one of these (USDG or WETH). */
+  usdg: Address;
+  weth: Address;
   /** Native ETH that must remain for gas in live mode. */
   gasReserveWei: bigint;
   /** Used when the user has not set max_slippage_bps. */
@@ -12,7 +15,7 @@ export type RiskConfig = {
   priceToleranceBps: number;
 };
 
-export const DEFAULT_RISK_CONFIG: Omit<RiskConfig, 'gasReserveWei'> = {
+export const DEFAULT_RISK_CONFIG: Omit<RiskConfig, 'gasReserveWei' | 'usdg' | 'weth'> = {
   defaultSlippageBps: 100,
   priceToleranceBps: 300,
 };
@@ -138,6 +141,9 @@ export class RiskEngine {
     // guards and the user's own exits keep working for paused agents (§3.10); the agent only acts while active
     const ok = intent.origin === 'agent' ? ctx.status === 'active' : ctx.status === 'active' || ctx.status === 'paused';
     if (!ok) throw new CheckFailed(0, 'agent_not_active', `agent status ${ctx.status} cannot trade for origin ${intent.origin}`);
+    if (ctx.quoteAsset !== this.d.config.usdg && ctx.quoteAsset !== this.d.config.weth) {
+      throw new CheckFailed(0, 'quote_not_allowed', 'agent quote asset must be USDG or WETH');
+    }
     return ctx;
   }
 
