@@ -1,0 +1,13 @@
+{
+  "name": "@odin/notifier",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "start": "node src/main.ts" },
+  "dependencies": {
+    "@odin/db": "workspace:*",
+    "@odin/shared": "workspace:*",
+    "pg": "8.13.1"
+  }
+}

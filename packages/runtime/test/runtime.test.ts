@@ -69,6 +69,10 @@ class FakeStore implements RuntimeStore {
   async applyFill(_: AgentRuntimeState, f: Fill) {
     this.fills.push(f);
   }
+  alerts: Record<string, unknown>[] = [];
+  async alert(_id: string, p: Record<string, unknown>) {
+    this.alerts.push(p);
+  }
 }
 
 const agent = (over: Partial<AgentRuntimeState> = {}): AgentRuntimeState => ({
@@ -119,6 +123,7 @@ describe('runTick', () => {
     expect(seen.job).toBeUndefined();
     expect(store.paperFills).toHaveLength(1);
     expect(store.fills[0]).toMatchObject({ tokenIn: USDG, tokenOut: TSLA });
+    expect(store.alerts[0]).toMatchObject({ event: 'trade_executed', agentId: 'a1', mode: 'paper', action: 'buy', token: TSLA });
     expect(store.decisions[0]).toMatchObject({ configVersion: 3, snapshotId: 42, origin: 'agent', model: 'claude-opus-5-5', tokensUsed: 9 });
     expect(seen.ctx!.data).toMatchObject({ balances: { [USDG]: '5000', [TSLA]: '0.000000005' } });
   });

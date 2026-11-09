@@ -196,6 +196,10 @@ export class PgRuntimeStore implements RuntimeStore {
     }
   }
 
+  async alert(sourceId: string, payload: Record<string, unknown> & { agentId: string; event: string }): Promise<void> {
+    await this.pool.query(`INSERT INTO alert_events (source, source_id, payload) VALUES ('runtime', $1, $2)`, [sourceId, JSON.stringify(payload)]);
+  }
+
   /** Seed or reset an agent's paper quote balance (raw units). */
   async setPaperBalance(agentId: string, quote: Address, raw: bigint): Promise<void> {
     await this.pool.query(

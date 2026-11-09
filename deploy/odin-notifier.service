@@ -1,0 +1,32 @@
+[Unit]
+Description=Odin Agentic notifier (in-app + Telegram)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=odin
+Group=odin
+EnvironmentFile=/etc/odin/chain.env
+EnvironmentFile=-/etc/odin/secrets/notifier.env
+WorkingDirectory=/opt/odin/app
+ExecStart=/usr/bin/node packages/notifier/src/main.ts
+Restart=on-failure
+RestartSec=3
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+CapabilityBoundingSet=
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

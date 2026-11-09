@@ -9,6 +9,7 @@ import { AuthService } from '../src/auth.ts';
 import { AgentService } from '../src/agents.ts';
 import { buildServer } from '../src/server.ts';
 import { FundsService } from '../src/funds.ts';
+import { NotificationService } from '../src/notifications.ts';
 
 // Runs only against a real, migrated Postgres: TEST_DATABASE_URL=postgresql://...
 const url = process.env.TEST_DATABASE_URL;
@@ -52,7 +53,7 @@ describe.skipIf(!url)('API (postgres, real SIWE signatures)', () => {
       executor: { executeWithdraw: async (j) => (withdrawCalls.push(j), { status: 'confirmed', txHash: '0xabc' }) },
       exporter: { exportKey: async () => ({ address: rnd(), privateKey: '0x01' }) },
     });
-    app = buildServer({ auth, agents, funds, setPaperBalance: async () => {}, rateLimit: { perIpPerMinute: 1000, perUserPerMinute: 1000 } });
+    app = buildServer({ auth, agents, funds, notifications: new NotificationService(pool), setPaperBalance: async () => {}, rateLimit: { perIpPerMinute: 1000, perUserPerMinute: 1000 } });
   });
   afterAll(async () => {
     await app?.close();

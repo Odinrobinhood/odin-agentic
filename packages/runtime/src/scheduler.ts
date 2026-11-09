@@ -58,7 +58,10 @@ export class PgSchedule implements Schedule {
     const errors = r.rows[0]?.consecutive_errors ?? 0;
     if (errors >= this.maxConsecutiveErrors) {
       // agents stopped by repeated errors (architecture §3.11); guards keep running for paused agents
-      await this.pool.query(`UPDATE agents SET status = 'paused' WHERE id = $1 AND status = 'active'`, [agentId]);
+      const p = await this.pool.query(`UPDATE agents SET status = 'paused' WHERE id = $1 AND status = 'active'`, [agentId]);
+      if (p.rowCount) {
+        await this.pool.query(`INSERT INTO alert_events (source, source_id, payload) VALUES ('runtime', $1, $2)`, [agentId, JSON.stringify({ event: 'agent_paused', agentId, error: result.error ?? '' })]);
+      }
       return { paused: true };
     }
     return { paused: false };

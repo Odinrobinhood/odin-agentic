@@ -80,4 +80,6 @@ export interface RuntimeStore {
    * Paper mode also moves the paper quote balance, which is kept as a position in the quote asset.
    */
   applyFill(agent: AgentRuntimeState, fill: Fill): Promise<void>;
+  /** Queue a notification (architecture §3.11); the owner is resolved from payload.agentId. */
+  alert(sourceId: string, payload: Record<string, unknown> & { agentId: string; event: string }): Promise<void>;
 }

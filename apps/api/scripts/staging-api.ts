@@ -69,6 +69,12 @@ show('-- close-all result (guard watcher):', cr);
 show('-- positions after close:', await call('GET', `/v1/agents/${id}/positions`, undefined, t));
 await pool.end();
 
+// notifications: the close-all above was queued as an alert; the notifier marks it delivered in-app
+await call('POST', '/v1/notifications/test', {}, t);
+await new Promise((r) => setTimeout(r, 5000));
+const feed = (await call('GET', '/v1/notifications?limit=5', undefined, t)).body as unknown as { payload: { event: string }; delivered_channels: string[] }[];
+console.log('-- notification feed:', JSON.stringify(feed.map((f) => [f.payload.event, f.delivered_channels])));
+
 // leave the staging scheduler clean: this agent has no LLM key to run with
 show('-- retire:', await call('POST', `/v1/agents/${id}/status`, { action: 'retire' }, t));
 show('-- withdraw still allowed after retire (expect insufficient_gas, not a status error):', await call('POST', `/v1/agents/${id}/withdraw`, { token: 'native', amount: '0.0001' }, t));

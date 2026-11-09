@@ -3,6 +3,7 @@ import { z, type ZodTypeAny } from 'zod';
 import type { Address, Hex } from 'viem';
 import { Rejection, type RejectionCode } from '@odin/shared';
 import type { AuthService } from './auth.ts';
+import { ChannelsInput, type NotificationService } from './notifications.ts';
 import { CloseAllInput, ExportInput, WithdrawInput, type FundsService } from './funds.ts';
 import { AgentService, AssetsInput, ConfigInput, GuardOverrideInput, ModeInput, PaperFundInput, RiskInput, StatusInput, TpSlInput } from './agents.ts';
 
@@ -10,6 +11,7 @@ export type ApiDeps = {
   auth: AuthService;
   agents: AgentService;
   funds: FundsService;
+  notifications: NotificationService;
   setPaperBalance: (agentId: string, quote: Address, raw: bigint) => Promise<void>;
   /** Fixed-window limits (architecture §6): per IP for auth routes, per user for everything else. */
   rateLimit?: { perIpPerMinute: number; perUserPerMinute: number };
@@ -138,6 +140,12 @@ export function buildServer(d: ApiDeps): FastifyInstance {
   app.get('/v1/agents/:id/decisions', { preHandler: authed }, async (req) => json(await d.agents.decisions(uid(req), aid(req), Number((req.query as { limit?: string }).limit ?? 50))));
   app.get('/v1/agents/:id/positions', { preHandler: authed }, async (req) => json(await d.agents.positions(uid(req), aid(req))));
   app.get('/v1/agents/:id/executions', { preHandler: authed }, async (req) => json(await d.agents.executions(uid(req), aid(req), Number((req.query as { limit?: string }).limit ?? 50))));
+
+  // ── notifications (architecture §3.11) ───────────────────────────────────────
+  app.get('/v1/notifications', { preHandler: authed }, async (req) => json(await d.notifications.feed(uid(req), Number((req.query as { limit?: string }).limit ?? 50))));
+  app.get('/v1/notifications/channels', { preHandler: authed }, async (req) => d.notifications.channels(uid(req)));
+  app.put('/v1/notifications/channels', { preHandler: authed }, async (req) => d.notifications.setChannels(uid(req), parse(ChannelsInput, req.body)));
+  app.post('/v1/notifications/test', { preHandler: authed }, async (req) => d.notifications.test(uid(req)));
 
   // ── funds (architecture §6): recipient is always the owner; sensitive actions need a fresh SIWE ─────────
   app.post('/v1/agents/:id/withdraw', { preHandler: authed }, async (req) => {

@@ -30,7 +30,7 @@ const LLM_CODES: Record<Exclude<DecideResult, { ok: true }>['reason'], Rejection
  * One tick for one agent (architecture §4):
  *  1. load snapshot + positions + balances   2. decide → store decision   3. hold → done
  *  4. risk → reject → store code             5–6. approve/swap via signer + executor (live) or paper fill
- *  7. update positions                       8. arm TP/SL guards          (9. notifier: not wired yet)
+ *  7. update positions                       8. arm TP/SL guards          9. notify
  */
 export async function runTick(deps: TickDeps, agentId: string): Promise<TickResult> {
   const agent = await deps.store.loadAgent(agentId);
@@ -129,6 +129,8 @@ export async function runTick(deps: TickDeps, agentId: string): Promise<TickResu
 
   // ── 7–8. positions + guards ────────────────────────────────────────────────
   await deps.store.applyFill(agent, { tokenIn: risk.tokenIn, tokenOut: risk.tokenOut, amountIn, amountOut });
+  // ── 9. notify ──────────────────────────────────────────────────────────────
+  await deps.store.alert(decisionId, { event: 'trade_executed', agentId: agent.agentId, mode: agent.mode, action: d.action, token: d.token, amountIn: amountIn.toString(), amountOut: amountOut.toString() });
   return { outcome: 'filled', decisionId, mode: agent.mode, amountIn, amountOut };
 }
 
