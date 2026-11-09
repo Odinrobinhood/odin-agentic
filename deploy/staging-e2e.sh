@@ -78,6 +78,10 @@ psql_su -d odin -c "SELECT t.symbol, q.symbol, r.path FROM routes r JOIN tokens 
 echo "-- latest snapshots (USDG per token):"
 psql_su -d odin -c "SELECT ts, t.symbol, round(price::numeric, 4), fee_tier FROM market_snapshots s JOIN tokens t ON t.address=s.token_address ORDER BY ts DESC LIMIT 3"
 
+echo "== runtime: paper ticks with a scripted decision provider (real risk engine + quoter, nothing signed)"
+(cd "$APP" && sudo -u odin env $(grep -v '^#' /etc/odin/chain.env | xargs) STAGING_AGENT_ID="$AGENT" \
+  node packages/runtime/scripts/staging-tick.ts)
+
 echo "== executor: signer -> real mainnet RPC broadcast from the unfunded staging wallet (must be refused: insufficient_gas)"
 (cd "$APP" && sudo -u odin env $(grep -v '^#' /etc/odin/chain.env | xargs) STAGING_AGENT_ID="$AGENT" \
   node packages/executor/scripts/staging-check.ts)

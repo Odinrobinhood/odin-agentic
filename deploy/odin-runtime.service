@@ -1,0 +1,34 @@
+[Unit]
+Description=Odin Agentic agent runtime + scheduler
+After=network-online.target postgresql.service odin-signer.service odin-market.service
+Wants=network-online.target
+# needs the LLM credential; provision.sh only enables this unit once it exists
+ConditionPathExists=/etc/odin/secrets/anthropic.env
+
+[Service]
+Type=simple
+User=odin
+Group=odin
+EnvironmentFile=/etc/odin/chain.env
+EnvironmentFile=/etc/odin/secrets/anthropic.env
+WorkingDirectory=/opt/odin/app
+ExecStart=/usr/bin/node packages/runtime/src/main.ts
+Restart=on-failure
+RestartSec=5
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+CapabilityBoundingSet=
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

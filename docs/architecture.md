@@ -107,7 +107,7 @@
   |---|---|
   | `system_prompt` / `mandate` | Free text: trading style, strategy, personality, rules |
   | `model` | Choice among supported providers |
-  | `temperature`, `max_tokens` | Model parameters |
+  | `temperature`, `max_tokens` | Model parameters. Current Claude models reject sampling parameters, so `temperature` is stored but not sent; depth is controlled by effort (`DECISION_EFFORT`, default `high`) |
   | `assets` | Tokens the agent may trade: any ERC-20 contract address on Robinhood Chain (Stock Tokens, memecoins, stablecoins, etc.), added by the user via search or by pasting an address |
   | `quote_asset` | The agent's base asset: **USDG or WETH only** (WETH is shown to users as ETH). Enforced by the API and again by the signer (`quote_not_allowed`) |
   | `context_inputs` | Data injected into the prompt: price, N-period candles, positions, decision history, etc. |
@@ -375,7 +375,7 @@ Everything below must be live with real money and real data on mainnet before la
 ## 11. Open decisions
 
 1. Custodial (the default in this document) vs non-custodial (smart account + session key).
-2. LLM providers & models supported at launch.
+2. LLM providers & models supported at launch: **decided** — Anthropic Claude first (`claude-opus-5-5` default, `claude-sonnet-5-5`, `claude-haiku-5-5`) behind the provider interface; other providers can be added without touching the runtime.
 3. Who pays for LLM tokens (user directly, per-tier quota, or paid in tokens).
 4. Role of the $ODIN token: access gating, tier limits, or paying LLM costs.
 5. Regional restrictions (Stock Tokens have jurisdictional restrictions).

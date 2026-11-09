@@ -40,6 +40,11 @@ export const REJECTION_CODES = [
   'exceeds_trades_per_day',
   'exceeds_daily_loss',
   'price_deviation',
+  // decision engine (the tick holds)
+  'llm_budget_exhausted',
+  'llm_refused',
+  'llm_invalid_output',
+  'llm_unavailable',
   // executor
   'broadcast_failed',
   'nonce_conflict',

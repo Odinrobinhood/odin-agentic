@@ -1,0 +1,15 @@
+{
+  "name": "@odin/decision",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "@anthropic-ai/sdk": "1.1.0",
+    "@odin/db": "workspace:*",
+    "@odin/shared": "workspace:*",
+    "pg": "8.13.1",
+    "viem": "2.21.54",
+    "zod": "3.25.76"
+  }
+}

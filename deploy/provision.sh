@@ -69,3 +69,16 @@ systemctl enable odin-market >/dev/null 2>&1
 systemctl restart odin-market
 sleep 5
 systemctl --no-pager --lines=4 status odin-market || true
+
+# --- agent runtime (needs ANTHROPIC_API_KEY=... in /etc/odin/secrets/anthropic.env, mode 0440 root:odin) --------
+install -m 0644 "$APP/deploy/odin-runtime.service" /etc/systemd/system/odin-runtime.service
+systemctl daemon-reload
+if [ -f /etc/odin/secrets/anthropic.env ]; then
+  chown root:odin /etc/odin/secrets/anthropic.env && chmod 0440 /etc/odin/secrets/anthropic.env
+  systemctl enable odin-runtime >/dev/null 2>&1
+  systemctl restart odin-runtime
+  sleep 3
+  systemctl --no-pager --lines=4 status odin-runtime || true
+else
+  echo "odin-runtime: not started (no /etc/odin/secrets/anthropic.env)"
+fi
