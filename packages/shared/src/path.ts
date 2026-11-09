@@ -50,3 +50,9 @@ export function decodePath(path: Hex): DecodedPath {
   const hops: Hop[] = fees.map((fee, k) => ({ tokenIn: tokens[k]!, fee, tokenOut: tokens[k + 1]! }));
   return { tokens, fees, hops };
 }
+
+/** Reverse a path (A -fee1-> B -fee2-> C becomes C -fee2-> B -fee1-> A), e.g. a sell route into a buy route. */
+export function reversePath(path: Hex): Hex {
+  const { tokens, fees } = decodePath(path);
+  return encodePath([...tokens].reverse(), [...fees].reverse());
+}

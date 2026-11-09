@@ -33,6 +33,7 @@ export const REJECTION_CODES = [
   'chain_read_failed',
   // risk engine
   'insufficient_balance',
+  'insufficient_gas',
   'exceeds_position_limit',
   'exceeds_exposure_limit',
   'exceeds_trades_per_day',

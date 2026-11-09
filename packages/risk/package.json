@@ -1,0 +1,13 @@
+{
+  "name": "@odin/risk",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "@odin/db": "workspace:*",
+    "@odin/shared": "workspace:*",
+    "pg": "8.13.1",
+    "viem": "2.21.54"
+  }
+}
