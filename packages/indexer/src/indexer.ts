@@ -83,7 +83,7 @@ export class Indexer {
       const to = from + this.cfg.batchBlocks - 1n < safeHead ? from + this.cfg.batchBlocks - 1n : safeHead;
       const logs = await this.chain.logs(s.contract, s.kind === 'transfer' ? TRANSFER_TOPIC : SWAP_TOPIC, from, to);
       // use the timestamps the RPC returns with each log; fetch headers only for logs without one
-      const times = new Map<bigint, Date>(logs.filter((l) => l.blockTimestamp !== undefined).map((l) => [l.blockNumber, new Date(Number(l.blockTimestamp) * 1000)]));
+      const times = new Map<bigint, Date>(logs.filter((l) => l.blockTimestamp !== undefined && l.blockTimestamp > 0n).map((l) => [l.blockNumber, new Date(Number(l.blockTimestamp) * 1000)]));
       for (const [b, t] of await this.blockTimes([...new Set(logs.filter((l) => !times.has(l.blockNumber)).map((l) => l.blockNumber))])) times.set(b, t);
       const end = await this.chain.block(to);
       const transfers: TransferRow[] = [];

@@ -4,7 +4,10 @@ export const TRANSFER_TOPIC: Hex = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163
 // Swap(address indexed sender, address indexed recipient, int256 amount0, int256 amount1, uint160 sqrtPriceX96, uint128 liquidity, int24 tick)
 export const SWAP_TOPIC: Hex = '0xc42079f94a6350d7e6235f29174924f928cc2ac818eb64fed8004e115fbcca67';
 
-/** blockTimestamp is returned by Nitro RPCs; when absent the indexer fetches block headers. */
+/**
+ * blockTimestamp is part of newer log responses. Robinhood Chain RPCs return the field but as 0x0, so a zero
+ * value is treated as absent and the indexer fetches (batched) block headers instead.
+ */
 export type RawLog = { address: Address; topics: Hex[]; data: Hex; blockNumber: bigint; blockHash: Hex; transactionHash: Hex; logIndex: number; blockTimestamp?: bigint };
 
 export interface IndexerChain {
@@ -34,7 +37,7 @@ export class ViemIndexerChain implements IndexerChain {
     });
     return (raw as { address: string; topics: Hex[]; data: Hex; blockNumber: Hex; blockHash: Hex; transactionHash: Hex; logIndex: Hex; blockTimestamp?: Hex }[]).map((l) => ({
       address: getAddress(l.address), topics: l.topics, data: l.data, blockNumber: BigInt(l.blockNumber), blockHash: l.blockHash, transactionHash: l.transactionHash, logIndex: Number(l.logIndex),
-      ...(l.blockTimestamp ? { blockTimestamp: BigInt(l.blockTimestamp) } : {}),
+      ...(l.blockTimestamp && BigInt(l.blockTimestamp) > 0n ? { blockTimestamp: BigInt(l.blockTimestamp) } : {}),
     }));
   }
   async hasCode(address: Address, at: bigint): Promise<boolean> {
