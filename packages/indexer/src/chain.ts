@@ -4,7 +4,8 @@ export const TRANSFER_TOPIC: Hex = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163
 // Swap(address indexed sender, address indexed recipient, int256 amount0, int256 amount1, uint160 sqrtPriceX96, uint128 liquidity, int24 tick)
 export const SWAP_TOPIC: Hex = '0xc42079f94a6350d7e6235f29174924f928cc2ac818eb64fed8004e115fbcca67';
 
-export type RawLog = { address: Address; topics: Hex[]; data: Hex; blockNumber: bigint; blockHash: Hex; transactionHash: Hex; logIndex: number };
+/** blockTimestamp is returned by Nitro RPCs; when absent the indexer fetches block headers. */
+export type RawLog = { address: Address; topics: Hex[]; data: Hex; blockNumber: bigint; blockHash: Hex; transactionHash: Hex; logIndex: number; blockTimestamp?: bigint };
 
 export interface IndexerChain {
   head(): Promise<bigint>;
@@ -17,7 +18,7 @@ export interface IndexerChain {
 export class ViemIndexerChain implements IndexerChain {
   private readonly c;
   constructor(rpcUrls: string[]) {
-    this.c = createPublicClient({ transport: fallback(rpcUrls.map((u) => http(u, { timeout: 15_000, retryCount: 2 })), { rank: false }) });
+    this.c = createPublicClient({ transport: fallback(rpcUrls.map((u) => http(u, { timeout: 15_000, retryCount: 2, batch: { batchSize: 100 } })), { rank: false }) });
   }
   head(): Promise<bigint> {
     return this.c.getBlockNumber();
@@ -31,8 +32,9 @@ export class ViemIndexerChain implements IndexerChain {
       method: 'eth_getLogs',
       params: [{ address, topics: [topic], fromBlock: `0x${from.toString(16)}`, toBlock: `0x${to.toString(16)}` }],
     });
-    return (raw as { address: string; topics: Hex[]; data: Hex; blockNumber: Hex; blockHash: Hex; transactionHash: Hex; logIndex: Hex }[]).map((l) => ({
+    return (raw as { address: string; topics: Hex[]; data: Hex; blockNumber: Hex; blockHash: Hex; transactionHash: Hex; logIndex: Hex; blockTimestamp?: Hex }[]).map((l) => ({
       address: getAddress(l.address), topics: l.topics, data: l.data, blockNumber: BigInt(l.blockNumber), blockHash: l.blockHash, transactionHash: l.transactionHash, logIndex: Number(l.logIndex),
+      ...(l.blockTimestamp ? { blockTimestamp: BigInt(l.blockTimestamp) } : {}),
     }));
   }
   async hasCode(address: Address, at: bigint): Promise<boolean> {

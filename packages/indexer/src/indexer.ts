@@ -82,7 +82,9 @@ export class Indexer {
       const from = s.lastBlock + 1n;
       const to = from + this.cfg.batchBlocks - 1n < safeHead ? from + this.cfg.batchBlocks - 1n : safeHead;
       const logs = await this.chain.logs(s.contract, s.kind === 'transfer' ? TRANSFER_TOPIC : SWAP_TOPIC, from, to);
-      const times = await this.blockTimes([...new Set(logs.map((l) => l.blockNumber))]);
+      // use the timestamps the RPC returns with each log; fetch headers only for logs without one
+      const times = new Map<bigint, Date>(logs.filter((l) => l.blockTimestamp !== undefined).map((l) => [l.blockNumber, new Date(Number(l.blockTimestamp) * 1000)]));
+      for (const [b, t] of await this.blockTimes([...new Set(logs.filter((l) => !times.has(l.blockNumber)).map((l) => l.blockNumber))])) times.set(b, t);
       const end = await this.chain.block(to);
       const transfers: TransferRow[] = [];
       const swaps: SwapRow[] = [];
@@ -109,8 +111,8 @@ export class Indexer {
 
   private async blockTimes(blocks: bigint[]): Promise<Map<bigint, Date>> {
     const out = new Map<bigint, Date>();
-    for (let i = 0; i < blocks.length; i += 20) {
-      const part = blocks.slice(i, i + 20);
+    for (let i = 0; i < blocks.length; i += 100) {
+      const part = blocks.slice(i, i + 100);
       const got = await Promise.all(part.map((b) => this.chain.block(b)));
       part.forEach((b, k) => out.set(b, new Date(Number(got[k]!.timestamp) * 1000)));
     }

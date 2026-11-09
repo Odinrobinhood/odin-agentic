@@ -17,6 +17,16 @@ export interface IndexerStore {
 }
 
 const lc = (a: string) => a.toLowerCase();
+
+/** Multi-row INSERT in chunks (one round trip per 500 rows instead of one per row). */
+async function insertMany(client: { query: (sql: string, params: unknown[]) => Promise<unknown> }, target: string, rows: unknown[][]) {
+  for (let i = 0; i < rows.length; i += 500) {
+    const chunk = rows.slice(i, i + 500);
+    const width = chunk[0]!.length;
+    const values = chunk.map((_, r) => `(${Array.from({ length: width }, (_, c) => `$${r * width + c + 1}`).join(', ')})`).join(', ');
+    await client.query(`INSERT INTO ${target} VALUES ${values} ON CONFLICT DO NOTHING`, chunk.flat());
+  }
+}
 export const streamName = (kind: 'transfer' | 'swap', contract: Address) => `${kind}:${lc(contract)}`;
 
 export class PgIndexerStore implements IndexerStore {
@@ -56,18 +66,10 @@ export class PgIndexerStore implements IndexerStore {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
-      for (const t of transfers) {
-        await client.query(
-          `INSERT INTO transfers (block, block_time, tx_hash, log_index, token_address, "from", "to", amount) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT DO NOTHING`,
-          [t.block.toString(), t.blockTime, t.txHash, t.logIndex, lc(t.token), lc(t.from), lc(t.to), t.amount.toString()],
-        );
-      }
-      for (const w of swaps) {
-        await client.query(
-          `INSERT INTO swaps (block, block_time, tx_hash, log_index, pool, sender, recipient, amount0, amount1, price) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT DO NOTHING`,
-          [w.block.toString(), w.blockTime, w.txHash, w.logIndex, lc(w.pool), lc(w.sender), lc(w.recipient), w.amount0.toString(), w.amount1.toString(), w.price],
-        );
-      }
+      await insertMany(client, 'transfers (block, block_time, tx_hash, log_index, token_address, "from", "to", amount)', transfers.map((t) =>
+        [t.block.toString(), t.blockTime, t.txHash, t.logIndex, lc(t.token), lc(t.from), lc(t.to), t.amount.toString()]));
+      await insertMany(client, 'swaps (block, block_time, tx_hash, log_index, pool, sender, recipient, amount0, amount1, price)', swaps.map((w) =>
+        [w.block.toString(), w.blockTime, w.txHash, w.logIndex, lc(w.pool), lc(w.sender), lc(w.recipient), w.amount0.toString(), w.amount1.toString(), w.price]));
       // optimistic: only advance if nobody else moved the stream meanwhile
       const r = await client.query('UPDATE indexer_state SET last_block = $2, last_block_hash = $3, updated_at = now() WHERE stream = $1 AND last_block = $4', [
         s.name, toBlock.toString(), toHash, s.lastBlock.toString(),

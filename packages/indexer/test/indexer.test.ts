@@ -87,6 +87,17 @@ describe('indexer', () => {
     expect(s.transfers[0]).toMatchObject({ token: TOKEN, from: A, to: B, blockTime: new Date((1_700_000_000 + 310) * 1000) });
   });
 
+  it('uses the blockTimestamp returned with logs instead of fetching headers', async () => {
+    const c = new FakeChain();
+    const s = new MemStore();
+    s.tgt = [{ kind: 'transfer', contract: TOKEN }];
+    const ix = new Indexer(c, s, { confirmations: 0n, batchBlocks: 1000n, reorgDepth: 10n, minStartBlock: 900n });
+    await ix.enroll();
+    c.logList = [{ ...transferLog(950n, 1n), blockTimestamp: 42n }];
+    await ix.step();
+    expect(s.transfers[0]!.blockTime).toEqual(new Date(42_000));
+  });
+
   it('rewinds on a reorg and re-indexes the replaced blocks', async () => {
     const c = new FakeChain();
     const s = new MemStore();
