@@ -10,7 +10,10 @@
     "start": "node src/main.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "1.1.0",
+    "@odin/analyst": "workspace:*",
     "@odin/db": "workspace:*",
+    "@odin/decision": "workspace:*",
     "@odin/executor": "workspace:*",
     "@odin/market": "workspace:*",
     "@odin/portfolio": "workspace:*",
@@ -20,6 +23,6 @@
     "jose": "6.2.13",
     "pg": "8.13.1",
     "viem": "2.21.54",
-    "zod": "3.23.8"
+    "zod": "3.25.76"
   }
 }

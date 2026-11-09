@@ -11,6 +11,9 @@ import { buildServer } from './server.ts';
 import { FundsService } from './funds.ts';
 import { NotificationService } from './notifications.ts';
 import { PortfolioService, ViemPortfolioChain } from '@odin/portfolio';
+import Anthropic from '@anthropic-ai/sdk';
+import { AnalystEngine, AnalystStore, AnalystTools, ClaudeAnalystLLM } from '@odin/analyst';
+import { PgTokenMeter } from '@odin/decision';
 
 function req(key: string): string {
   const v = process.env[key];
@@ -82,10 +85,23 @@ const funds = new FundsService({
   },
 });
 
+const portfolio = new PortfolioService({ pool, chain: new ViemPortfolioChain(market.rpcUrls, market.quoter), usdg: market.usdg, weth: market.weth });
+const analyst = {
+  store: new AnalystStore(pool),
+  engine: new AnalystEngine({
+    // without ANTHROPIC_API_KEY every call fails and the route answers llm_unavailable
+    llm: process.env.ANTHROPIC_API_KEY ? new ClaudeAnalystLLM(new Anthropic()) : { call: async () => { throw new Error('no LLM credential configured on this server'); } },
+    tools: new AnalystTools({ pool, rpcUrls: market.rpcUrls, usdg: market.usdg, portfolio: (userId) => portfolio.forUser(userId) }),
+    meter: new PgTokenMeter(pool),
+    config: { model: process.env.ANALYST_MODEL ?? 'claude-opus-5-5', dailyTokenBudget: Number(process.env.DECISION_DAILY_TOKEN_BUDGET ?? 2_000_000) },
+  }),
+};
+
 const runtimeStore = new PgRuntimeStore(pool);
 const app = buildServer({
   pool,
-  portfolio: new PortfolioService({ pool, chain: new ViemPortfolioChain(market.rpcUrls, market.quoter), usdg: market.usdg, weth: market.weth }),
+  portfolio,
+  analyst,
   auth, agents, funds, notifications: new NotificationService(pool), setPaperBalance: (a, q, raw) => runtimeStore.setPaperBalance(a, q, raw) });
 const [host, port] = (process.env.API_LISTEN ?? '127.0.0.1:7500').split(':');
 await app.listen({ host: host!, port: Number(port) });

@@ -103,6 +103,9 @@ echo "== indexer: streams and indexed rows (real Robinhood Chain logs)"
 psql_su -d odin -c "SELECT stream, last_block - start_block AS blocks_done FROM indexer_state WHERE contract IS NOT NULL ORDER BY stream"
 psql_su -d odin -c "SELECT (SELECT count(*) FROM transfers) AS transfers, (SELECT count(*) FROM swaps) AS swaps"
 
+echo "== analyst tools on real data (scripted model, no LLM key needed)"
+(cd "$APP" && sudo -u odin env $(grep -v '^#' /etc/odin/chain.env | xargs) node packages/analyst/scripts/staging-analyst.ts)
+
 echo "== executor: signer -> real mainnet RPC broadcast from the unfunded staging wallet (must be refused: insufficient_gas)"
 (cd "$APP" && sudo -u odin env $(grep -v '^#' /etc/odin/chain.env | xargs) STAGING_AGENT_ID="$AGENT" \
   node packages/executor/scripts/staging-check.ts)

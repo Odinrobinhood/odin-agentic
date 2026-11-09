@@ -23,9 +23,18 @@ importers:
 
   apps/api:
     dependencies:
+      '@anthropic-ai/sdk':
+        specifier: 1.1.0
+        version: 1.1.0(zod@3.25.76)
+      '@odin/analyst':
+        specifier: workspace:*
+        version: link:../../packages/analyst
       '@odin/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@odin/decision':
+        specifier: workspace:*
+        version: link:../../packages/decision
       '@odin/executor':
         specifier: workspace:*
         version: link:../../packages/executor
@@ -52,10 +61,31 @@ importers:
         version: 8.13.1
       viem:
         specifier: 2.21.54
-        version: 2.21.54(typescript@5.8.3)(zod@3.23.8)
+        version: 2.21.54(typescript@5.8.3)(zod@3.25.76)
       zod:
-        specifier: 3.23.8
-        version: 3.23.8
+        specifier: 3.25.76
+        version: 3.25.76
+
+  packages/analyst:
+    dependencies:
+      '@anthropic-ai/sdk':
+        specifier: 1.1.0
+        version: 1.1.0(zod@3.25.76)
+      '@odin/db':
+        specifier: workspace:*
+        version: link:../db
+      '@odin/decision':
+        specifier: workspace:*
+        version: link:../decision
+      '@odin/shared':
+        specifier: workspace:*
+        version: link:../shared
+      pg:
+        specifier: 8.13.1
+        version: 8.13.1
+      viem:
+        specifier: 2.21.54
+        version: 2.21.54(typescript@5.8.3)(zod@3.25.76)
 
   packages/db:
     dependencies:

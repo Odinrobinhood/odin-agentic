@@ -3,6 +3,7 @@ import { z, type ZodTypeAny } from 'zod';
 import { getAddress, type Address, type Hex } from 'viem';
 import { Rejection, type RejectionCode } from '@odin/shared';
 import type { AuthService } from './auth.ts';
+import type { AnalystEngine, AnalystStore } from '@odin/analyst';
 import { ChannelsInput, type NotificationService } from './notifications.ts';
 import { CloseAllInput, ExportInput, WithdrawInput, type FundsService } from './funds.ts';
 import { AgentService, AssetsInput, ConfigInput, GuardOverrideInput, ModeInput, PaperFundInput, RiskInput, StatusInput, TpSlInput } from './agents.ts';
@@ -12,6 +13,7 @@ export type ApiDeps = {
   agents: AgentService;
   funds: FundsService;
   notifications: NotificationService;
+  analyst: { engine: AnalystEngine; store: AnalystStore };
   portfolio: { forUser(userId: string): Promise<unknown>; wallet(address: Address, kind?: string, label?: string | null): Promise<unknown> };
   pool: { query: (sql: string, params?: unknown[]) => Promise<{ rowCount: number | null; rows: any[] }> };
   setPaperBalance: (agentId: string, quote: Address, raw: bigint) => Promise<void>;
@@ -142,6 +144,28 @@ export function buildServer(d: ApiDeps): FastifyInstance {
   app.get('/v1/agents/:id/decisions', { preHandler: authed }, async (req) => json(await d.agents.decisions(uid(req), aid(req), Number((req.query as { limit?: string }).limit ?? 50))));
   app.get('/v1/agents/:id/positions', { preHandler: authed }, async (req) => json(await d.agents.positions(uid(req), aid(req))));
   app.get('/v1/agents/:id/executions', { preHandler: authed }, async (req) => json(await d.agents.executions(uid(req), aid(req), Number((req.query as { limit?: string }).limit ?? 50))));
+
+  // ── analyst (architecture §3.13): read-only, answers only from on-chain tools ───────────────────────
+  const conv = async (req: FastifyRequest) => {
+    const id = (req.params as { cid: string }).cid;
+    if (!(await d.analyst.store.owned(uid(req), id))) throw new Rejection('bad_request', 'unknown conversation');
+    return id;
+  };
+  app.post('/v1/analyst/conversations', { preHandler: authed }, async (req) => ({ id: await d.analyst.store.create(uid(req), parse(z.object({ title: z.string().max(120).default('') }).strict(), req.body).title) }));
+  app.get('/v1/analyst/conversations', { preHandler: authed }, async (req) => json(await d.analyst.store.list(uid(req))));
+  app.get('/v1/analyst/conversations/:cid', { preHandler: authed }, async (req) => json(await d.analyst.store.messages(await conv(req))));
+  app.post('/v1/analyst/conversations/:cid/messages', { preHandler: authed }, async (req) => {
+    const id = await conv(req);
+    const { content } = parse(z.object({ content: z.string().min(1).max(4000) }).strict(), req.body);
+    let a;
+    try {
+      a = await d.analyst.engine.ask(uid(req), id, await d.analyst.store.history(id), content);
+    } catch (e) {
+      throw new Rejection('llm_unavailable', (e as Error).message.split('\n')[0] ?? 'analyst unavailable');
+    }
+    await d.analyst.store.append(id, content, a);
+    return json(a);
+  });
 
   // ── portfolio (architecture §3.15): SIWE + agent wallets automatically, plus watch-only addresses ────
   app.get('/v1/portfolio', { preHandler: authed }, async (req) => json(await d.portfolio.forUser(uid(req))));

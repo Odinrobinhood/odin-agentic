@@ -9,6 +9,7 @@ User=odin
 Group=odin
 EnvironmentFile=/etc/odin/chain.env
 EnvironmentFile=/etc/odin/api.env
+EnvironmentFile=-/etc/odin/secrets/anthropic.env
 WorkingDirectory=/opt/odin/app
 ExecStart=/usr/bin/node apps/api/src/main.ts
 Restart=on-failure
