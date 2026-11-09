@@ -32,7 +32,7 @@ DATABASE_URL=postgresql://... pnpm migrate
 ## Deploy (staging host)
 
 ```
-tar --exclude=node_modules -czf release.tgz package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json vitest.config.ts docs packages deploy
+git archive --format=tar.gz -o release.tgz HEAD   # committed tree only: other sessions' uncommitted work never ships
 # on the host, as root:
 bash deploy/provision.sh release.tgz
 bash deploy/staging-e2e.sh
