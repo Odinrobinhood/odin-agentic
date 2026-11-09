@@ -64,6 +64,12 @@ export class AuthService {
        ON CONFLICT (wallet_address) DO UPDATE SET last_siwe_at = EXCLUDED.last_siwe_at RETURNING id`,
       [address.toLowerCase(), this.now()],
     );
+    // the SIWE wallet is always part of the user's portfolio (architecture §3.15)
+    await this.pool.query(
+      `INSERT INTO tracked_wallets (user_id, address, kind, label) VALUES ($1, $2, 'siwe', 'My wallet')
+       ON CONFLICT (user_id, address) DO UPDATE SET kind = 'siwe'`,
+      [u.rows[0]!.id, address.toLowerCase()],
+    );
     return this.issue(u.rows[0]!.id, address, randomUUID(), userAgent);
   }
 

@@ -95,6 +95,12 @@ systemctl daemon-reload
 systemctl enable odin-notifier >/dev/null 2>&1
 systemctl restart odin-notifier
 
+# --- chain indexer -------------------------------------------------------------------------------
+install -m 0644 "$APP/deploy/odin-indexer.service" /etc/systemd/system/odin-indexer.service
+systemctl daemon-reload
+systemctl enable odin-indexer >/dev/null 2>&1
+systemctl restart odin-indexer
+
 # --- guard watcher (OS user odin-guard: guard channel token + odin_guard DB role) ----------------
 install -m 0644 "$APP/deploy/odin-guard.service" /etc/systemd/system/odin-guard.service
 systemctl daemon-reload

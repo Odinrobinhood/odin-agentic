@@ -1,6 +1,6 @@
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import { z, type ZodTypeAny } from 'zod';
-import type { Address, Hex } from 'viem';
+import { getAddress, type Address, type Hex } from 'viem';
 import { Rejection, type RejectionCode } from '@odin/shared';
 import type { AuthService } from './auth.ts';
 import { ChannelsInput, type NotificationService } from './notifications.ts';
@@ -12,6 +12,8 @@ export type ApiDeps = {
   agents: AgentService;
   funds: FundsService;
   notifications: NotificationService;
+  portfolio: { forUser(userId: string): Promise<unknown>; wallet(address: Address, kind?: string, label?: string | null): Promise<unknown> };
+  pool: { query: (sql: string, params?: unknown[]) => Promise<{ rowCount: number | null; rows: any[] }> };
   setPaperBalance: (agentId: string, quote: Address, raw: bigint) => Promise<void>;
   /** Fixed-window limits (architecture §6): per IP for auth routes, per user for everything else. */
   rateLimit?: { perIpPerMinute: number; perUserPerMinute: number };
@@ -140,6 +142,28 @@ export function buildServer(d: ApiDeps): FastifyInstance {
   app.get('/v1/agents/:id/decisions', { preHandler: authed }, async (req) => json(await d.agents.decisions(uid(req), aid(req), Number((req.query as { limit?: string }).limit ?? 50))));
   app.get('/v1/agents/:id/positions', { preHandler: authed }, async (req) => json(await d.agents.positions(uid(req), aid(req))));
   app.get('/v1/agents/:id/executions', { preHandler: authed }, async (req) => json(await d.agents.executions(uid(req), aid(req), Number((req.query as { limit?: string }).limit ?? 50))));
+
+  // ── portfolio (architecture §3.15): SIWE + agent wallets automatically, plus watch-only addresses ────
+  app.get('/v1/portfolio', { preHandler: authed }, async (req) => json(await d.portfolio.forUser(uid(req))));
+  app.get('/v1/portfolio/wallets/:address', { preHandler: authed }, async (req) => {
+    const a = (req.params as { address: string }).address;
+    if (!/^0x[0-9a-fA-F]{40}$/.test(a)) throw new Rejection('bad_request', 'bad address');
+    const t = await d.pool.query('SELECT kind, label FROM tracked_wallets WHERE user_id = $1 AND address = $2', [uid(req), a.toLowerCase()]);
+    if (!t.rows[0]) throw new Rejection('bad_request', 'wallet is not tracked');
+    return json(await d.portfolio.wallet(getAddress(a), t.rows[0].kind, t.rows[0].label));
+  });
+  app.post('/v1/portfolio/watch', { preHandler: authed }, async (req) => {
+    const b = parse(z.object({ address: z.string().regex(/^0x[0-9a-fA-F]{40}$/), label: z.string().max(60).optional() }).strict(), req.body);
+    const n = await d.pool.query('SELECT count(*)::int AS n FROM tracked_wallets WHERE user_id = $1 AND kind = $2', [uid(req), 'watch']);
+    if (n.rows[0].n >= 50) throw new Rejection('bad_request', 'watch list is full (50)');
+    await d.pool.query(`INSERT INTO tracked_wallets (user_id, address, kind, label) VALUES ($1, $2, 'watch', $3) ON CONFLICT (user_id, address) DO NOTHING`, [uid(req), b.address.toLowerCase(), b.label ?? null]);
+    return { ok: true };
+  });
+  app.delete('/v1/portfolio/watch/:address', { preHandler: authed }, async (req) => {
+    const a = (req.params as { address: string }).address.toLowerCase();
+    await d.pool.query(`DELETE FROM tracked_wallets WHERE user_id = $1 AND address = $2 AND kind = 'watch'`, [uid(req), a]);
+    return { ok: true };
+  });
 
   // ── notifications (architecture §3.11) ───────────────────────────────────────
   app.get('/v1/notifications', { preHandler: authed }, async (req) => json(await d.notifications.feed(uid(req), Number((req.query as { limit?: string }).limit ?? 50))));

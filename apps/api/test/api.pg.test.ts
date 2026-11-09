@@ -53,7 +53,7 @@ describe.skipIf(!url)('API (postgres, real SIWE signatures)', () => {
       executor: { executeWithdraw: async (j) => (withdrawCalls.push(j), { status: 'confirmed', txHash: '0xabc' }) },
       exporter: { exportKey: async () => ({ address: rnd(), privateKey: '0x01' }) },
     });
-    app = buildServer({ auth, agents, funds, notifications: new NotificationService(pool), setPaperBalance: async () => {}, rateLimit: { perIpPerMinute: 1000, perUserPerMinute: 1000 } });
+    app = buildServer({ pool, portfolio: { forUser: async () => ({}), wallet: async () => ({}) }, auth, agents, funds, notifications: new NotificationService(pool), setPaperBalance: async () => {}, rateLimit: { perIpPerMinute: 1000, perUserPerMinute: 1000 } });
   });
   afterAll(async () => {
     await app?.close();

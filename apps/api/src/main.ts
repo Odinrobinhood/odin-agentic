@@ -10,6 +10,7 @@ import { AgentService } from './agents.ts';
 import { buildServer } from './server.ts';
 import { FundsService } from './funds.ts';
 import { NotificationService } from './notifications.ts';
+import { PortfolioService, ViemPortfolioChain } from '@odin/portfolio';
 
 function req(key: string): string {
   const v = process.env[key];
@@ -82,7 +83,10 @@ const funds = new FundsService({
 });
 
 const runtimeStore = new PgRuntimeStore(pool);
-const app = buildServer({ auth, agents, funds, notifications: new NotificationService(pool), setPaperBalance: (a, q, raw) => runtimeStore.setPaperBalance(a, q, raw) });
+const app = buildServer({
+  pool,
+  portfolio: new PortfolioService({ pool, chain: new ViemPortfolioChain(market.rpcUrls, market.quoter), usdg: market.usdg, weth: market.weth }),
+  auth, agents, funds, notifications: new NotificationService(pool), setPaperBalance: (a, q, raw) => runtimeStore.setPaperBalance(a, q, raw) });
 const [host, port] = (process.env.API_LISTEN ?? '127.0.0.1:7500').split(':');
 await app.listen({ host: host!, port: Number(port) });
 console.log(JSON.stringify({ msg: 'api up', listen: `${host}:${port}`, domain: process.env.API_SIWE_DOMAIN }));

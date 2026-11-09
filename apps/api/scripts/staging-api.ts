@@ -69,6 +69,11 @@ show('-- close-all result (guard watcher):', cr);
 show('-- positions after close:', await call('GET', `/v1/agents/${id}/positions`, undefined, t));
 await pool.end();
 
+// portfolio: watch the real WETH/USDG fee-100 pool (holds real balances) next to the SIWE + agent wallets
+show('-- watch pool address:', await call('POST', '/v1/portfolio/watch', { address: '0x52e65b17fb6e5ba00ed806f37afcd2daa50271ca', label: 'WETH/USDG pool' }, t));
+const pf = (await call('GET', '/v1/portfolio', undefined, t)).body;
+console.log('-- portfolio:', JSON.stringify({ valueUsdg: Math.round(pf.valueUsdg), unpriced: pf.unpriced, asOfBlock: pf.asOfBlock, wallets: pf.wallets.map((w: any) => ({ kind: w.kind, valueUsdg: Math.round(w.valueUsdg), holdings: w.holdings.map((h: any) => [h.symbol, h.valueUsdg === null ? null : Math.round(h.valueUsdg), h.historyComplete]) })) }));
+
 // notifications: the close-all above was queued as an alert; the notifier marks it delivered in-app
 await call('POST', '/v1/notifications/test', {}, t);
 await new Promise((r) => setTimeout(r, 5000));

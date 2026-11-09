@@ -13,6 +13,7 @@
     "@odin/db": "workspace:*",
     "@odin/executor": "workspace:*",
     "@odin/market": "workspace:*",
+    "@odin/portfolio": "workspace:*",
     "@odin/runtime": "workspace:*",
     "@odin/shared": "workspace:*",
     "fastify": "5.12.7",

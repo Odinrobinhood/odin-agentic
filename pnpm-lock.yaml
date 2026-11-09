@@ -32,6 +32,9 @@ importers:
       '@odin/market':
         specifier: workspace:*
         version: link:../../packages/market
+      '@odin/portfolio':
+        specifier: workspace:*
+        version: link:../../packages/portfolio
       '@odin/runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
@@ -120,6 +123,21 @@ importers:
         specifier: 2.21.54
         version: 2.21.54(typescript@5.8.3)(zod@3.25.76)
 
+  packages/indexer:
+    dependencies:
+      '@odin/db':
+        specifier: workspace:*
+        version: link:../db
+      '@odin/shared':
+        specifier: workspace:*
+        version: link:../shared
+      pg:
+        specifier: 8.13.1
+        version: 8.13.1
+      viem:
+        specifier: 2.21.54
+        version: 2.21.54(typescript@5.8.3)(zod@3.25.76)
+
   packages/market:
     dependencies:
       '@odin/db':
@@ -146,6 +164,21 @@ importers:
       pg:
         specifier: 8.13.1
         version: 8.13.1
+
+  packages/portfolio:
+    dependencies:
+      '@odin/db':
+        specifier: workspace:*
+        version: link:../db
+      '@odin/shared':
+        specifier: workspace:*
+        version: link:../shared
+      pg:
+        specifier: 8.13.1
+        version: 8.13.1
+      viem:
+        specifier: 2.21.54
+        version: 2.21.54(typescript@5.8.3)(zod@3.25.76)
 
   packages/risk:
     dependencies:
