@@ -43,10 +43,12 @@ export class PgWatchdogData implements WatchdogData {
   }
 
   async overdueAgents(seconds: number) {
+    // an active agent the scheduler never enrolled (e.g. the runtime is down) is overdue too
     const r = await this.pool.query<{ n: number }>(
-      `SELECT count(*)::int AS n FROM agent_schedule s JOIN agents a ON a.id = s.agent_id
-        WHERE a.status = 'active' AND s.next_tick_at < now() - make_interval(secs => $1)
-          AND (s.lease_until IS NULL OR s.lease_until < now())`,
+      `SELECT count(*)::int AS n FROM agents a LEFT JOIN agent_schedule s ON s.agent_id = a.id
+        WHERE a.status = 'active'
+          AND ((s.agent_id IS NULL AND a.created_at < now() - make_interval(secs => $1))
+            OR (s.next_tick_at < now() - make_interval(secs => $1) AND (s.lease_until IS NULL OR s.lease_until < now())))`,
       [seconds],
     );
     return r.rows[0]?.n ?? 0;

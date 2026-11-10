@@ -9,7 +9,7 @@ export interface WatchdogData {
   nonceDrift(): Promise<{ wallet: Address; agentId: string; chainNonce: number; recorded: number; drift: number }[]>;
   /** Resolve executions stuck in signed/broadcast; returns how many are still unresolved. */
   reconcile(): Promise<{ resolved: number; pending: number }>;
-  /** Active agents whose tick is overdue by more than `seconds` and that nobody holds a lease on. */
+  /** Active agents whose tick is overdue by more than `seconds` (or that were never scheduled) and that nobody holds a lease on. */
   overdueAgents(seconds: number): Promise<number>;
   /** Agent decisions in the window and how many failed because the LLM was unavailable or invalid. */
   llmOutcomes(minutes: number): Promise<{ total: number; failed: number }>;
