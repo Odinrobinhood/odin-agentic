@@ -101,7 +101,7 @@ if [ -n "$NVDA" ]; then
   NBUY=$(psql_su -d odin -c "SELECT path FROM routes WHERE token_address = '$NVDA' AND quote_address = '$USDG'")
   # routes are stored token -> quote (sell); reverse the hops for the buy
   NBUY=$(node -e 'const h=process.argv[1].slice(2);const t=[],f=[];let i=0;for(;;){t.push(h.slice(i,i+40));i+=40;if(i>=h.length)break;f.push(h.slice(i,i+6));i+=6}console.log("0x"+t.reverse().map((x,k)=>x+(f.slice().reverse()[k]??"")).join(""))' "$NBUY")
-  post "$AT" 7401 "{\"agentId\":\"$AGENT\",\"swap\":{\"path\":\"$NBUY\",\"amountIn\":\"1000000\"},\"amountOutMin\":\"$(minout "$NBUY" 1000000)\",$GAS}" /v1/swap | jq -c '{txHash, to, error}'
+  post "$AT" 7401 "{\"agentId\":\"$AGENT\",\"swap\":{\"path\":\"$NBUY\",\"amountIn\":\"1000000\"},\"amountOutMin\":\"$(minout "$NBUY" 1000000)\",${GAS/\"nonce\":0/\"nonce\":1}}" /v1/swap | jq -c '{txHash, to, error}'
   psql_su -d odin -c "DELETE FROM agent_assets WHERE agent_id = '$AGENT' AND token_address = '$NVDA'" >/dev/null
 else
   echo "NVDA not in the catalog yet"
