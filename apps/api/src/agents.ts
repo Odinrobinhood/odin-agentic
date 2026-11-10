@@ -1,5 +1,6 @@
 import { getAddress, parseUnits, type Address } from 'viem';
 import { z } from 'zod';
+import { OPENROUTER_PREFIX, openRouterModels } from '@odin/decision';
 import type { Pool } from '@odin/db';
 import type { TokenRegistry } from '@odin/market';
 import { Rejection } from '@odin/shared';
@@ -8,13 +9,18 @@ import { TriggerSpec } from '@odin/signals';
 /** Models offered at launch (architecture §11.2); must match the Decision Engine's provider. */
 export const SUPPORTED_MODELS = ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'] as const;
 
+/** Models a config may name: Claude, plus the OpenRouter models the operator allowlisted (OPENROUTER_MODELS). */
+export const allowedModels = (): string[] => [...SUPPORTED_MODELS, ...openRouterModels()];
+export const modelSchema = z.string().max(200).refine((m) => allowedModels().includes(m), 'model is not offered on this server (see GET /v1/models)');
+export const providerOf = (model: string) => (model.startsWith(OPENROUTER_PREFIX) ? 'openrouter' : 'anthropic');
+
 const decimalStr = z.string().regex(/^(0|[1-9][0-9]*)(\.[0-9]+)?$/);
 const addressStr = z.string().regex(/^0x[0-9a-fA-F]{40}$/);
 
 export const ConfigInput = z
   .object({
     systemPrompt: z.string().max(20_000),
-    model: z.enum(SUPPORTED_MODELS),
+    model: modelSchema,
     maxTokens: z.number().int().min(1024).max(128_000).default(16_000),
     temperature: z.number().min(0).max(1).default(1),
     /** USDG or WETH only (base assets). */
@@ -145,9 +151,9 @@ export class AgentService {
     const r = await this.d.pool.query<{ version: number }>(
       `INSERT INTO agent_configs (agent_id, version, system_prompt, model_provider, model_name, temperature, max_tokens, quote_asset,
                                   context_inputs, cadence_seconds, triggers)
-       SELECT $1, COALESCE(max(version), 0) + 1, $2, 'anthropic', $3, $4, $5, $6, $7, $8, $9 FROM agent_configs WHERE agent_id = $1
+       SELECT $1, COALESCE(max(version), 0) + 1, $2, $10, $3, $4, $5, $6, $7, $8, $9 FROM agent_configs WHERE agent_id = $1
        RETURNING version`,
-      [agentId, input.systemPrompt, input.model, input.temperature, input.maxTokens, quote.toLowerCase(), JSON.stringify(input.contextInputs), input.cadenceSeconds, JSON.stringify(input.triggers)],
+      [agentId, input.systemPrompt, input.model, input.temperature, input.maxTokens, quote.toLowerCase(), JSON.stringify(input.contextInputs), input.cadenceSeconds, JSON.stringify(input.triggers), providerOf(input.model)],
     );
     return { version: r.rows[0]!.version };
   }

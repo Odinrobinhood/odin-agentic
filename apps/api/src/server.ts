@@ -10,7 +10,7 @@ import { AlertInput, AlertPatch, ProfileInput, type AlertService } from './alert
 import type { NotificationService } from './notifications.ts';
 import type { StatusService } from './status.ts';
 import { CloseAllInput, ExportInput, WithdrawInput, type FundsService } from './funds.ts';
-import { AgentService, AssetsInput, ConfigInput, GuardOverrideInput, ModeInput, PaperFundInput, RiskInput, StatusInput, TpSlInput } from './agents.ts';
+import { AgentService, AssetsInput, ConfigInput, GuardOverrideInput, ModeInput, PaperFundInput, RiskInput, StatusInput, TpSlInput, allowedModels, providerOf } from './agents.ts';
 
 export type ApiDeps = {
   auth: AuthService;
@@ -119,6 +119,8 @@ export function buildServer(d: ApiDeps): FastifyInstance {
     await d.auth.logoutAll(uid(req));
     return { ok: true };
   });
+  // models a user may pick for agents and AI signals on this server (Claude + operator-allowlisted OpenRouter models)
+  app.get('/v1/models', { preHandler: authed }, async () => allowedModels().map((id) => ({ id, provider: providerOf(id) })));
   app.get('/v1/me', { preHandler: authed }, async (req) => ({ userId: uid(req), address: (req as Authed).user.address }));
 
   // ── agents ──────────────────────────────────────────────────────────────────

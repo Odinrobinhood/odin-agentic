@@ -1,13 +1,13 @@
 import { HEALTH_PORTS, Health } from '@odin/shared';
 import { getAddress } from 'viem';
 import { createPool } from '@odin/db';
-import { ClaudeProvider, DecisionEngine, PgTokenMeter } from '@odin/decision';
+import { DecisionEngine, PgTokenMeter, providersFromEnv } from '@odin/decision';
 import { BacktestWorker } from './worker.ts';
 
 const pool = createPool(process.env.DATABASE_URL ?? 'postgresql://odin@/odin?host=/var/run/postgresql', { max: 3 });
 // backtest calls count against the user's daily LLM budget like live decisions
 const engine = new DecisionEngine({
-  providers: [new ClaudeProvider({ effort: (process.env.DECISION_EFFORT ?? 'high') as 'high' })],
+  providers: providersFromEnv(process.env, (process.env.DECISION_EFFORT ?? 'high') as 'high'),
   meter: new PgTokenMeter(pool),
   config: { dailyTokenBudget: Number(process.env.DECISION_DAILY_TOKEN_BUDGET ?? 2_000_000) },
 });

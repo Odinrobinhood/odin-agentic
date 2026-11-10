@@ -44,6 +44,8 @@ COMMIT=$(gzip -dc "$TARBALL" 2>/dev/null | git get-tar-commit-id 2>/dev/null | h
 echo "BUILD_COMMIT=${COMMIT:-unknown}" > /etc/odin/build.env
 chmod 0644 /etc/odin/build.env
 install -m 0644 "$APP/deploy/chain.mainnet.env" /etc/odin/chain.env
+# operator-edited (OpenRouter model allowlist): installed once, never overwritten
+[ -f /etc/odin/llm.env ] || install -m 0644 "$APP/deploy/llm.env" /etc/odin/llm.env
 install -m 0644 "$APP/deploy/chainlink.mainnet.json" /etc/odin/chainlink.json
 
 # --- database ------------------------------------------------------------------------------------
@@ -141,7 +143,7 @@ systemctl restart odin-web
 # --- watchdog + backups (daily dump, weekly restore test) ----------------------------------------
 # services the watchdog expects up: runtime/backtest only once the LLM credential exists
 EXPECTED=signer,api,web,market,guard,notifier,indexer,signals
-[ -f /etc/odin/secrets/anthropic.env ] && EXPECTED=$EXPECTED,runtime,backtest
+{ [ -f /etc/odin/secrets/anthropic.env ] || [ -f /etc/odin/secrets/openrouter.env ]; } && EXPECTED=$EXPECTED,runtime,backtest
 echo "WATCHDOG_SERVICES=$EXPECTED" > /etc/odin/watchdog.env
 chmod 0644 /etc/odin/watchdog.env
 install -d -o postgres -g postgres -m 0700 /var/backups/odin
@@ -161,16 +163,19 @@ systemctl restart odin-guard
 sleep 3
 systemctl --no-pager --lines=3 status odin-guard || true
 
-# --- agent runtime (needs ANTHROPIC_API_KEY=... in /etc/odin/secrets/anthropic.env, mode 0440 root:odin) --------
+# --- agent runtime: needs ANTHROPIC_API_KEY=... in /etc/odin/secrets/anthropic.env and/or OPENROUTER_API_KEY=... in
+# /etc/odin/secrets/openrouter.env (mode 0440 root:odin); OpenRouter models are allowlisted in /etc/odin/llm.env ---------
 install -m 0644 "$APP/deploy/odin-runtime.service" /etc/systemd/system/odin-runtime.service
 install -m 0644 "$APP/deploy/odin-backtest.service" /etc/systemd/system/odin-backtest.service
 systemctl daemon-reload
-if [ -f /etc/odin/secrets/anthropic.env ]; then
-  chown root:odin /etc/odin/secrets/anthropic.env && chmod 0440 /etc/odin/secrets/anthropic.env
+for s in anthropic openrouter; do
+  if [ -f /etc/odin/secrets/$s.env ]; then chown root:odin /etc/odin/secrets/$s.env && chmod 0440 /etc/odin/secrets/$s.env; fi
+done
+if [ -f /etc/odin/secrets/anthropic.env ] || [ -f /etc/odin/secrets/openrouter.env ]; then
   systemctl enable odin-runtime odin-backtest >/dev/null 2>&1
   systemctl restart odin-runtime odin-backtest
   sleep 3
   systemctl --no-pager --lines=4 status odin-runtime || true
 else
-  echo "odin-runtime, odin-backtest: not started (no /etc/odin/secrets/anthropic.env)"
+  echo "odin-runtime, odin-backtest: not started (no LLM key in /etc/odin/secrets/anthropic.env or openrouter.env)"
 fi

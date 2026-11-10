@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { Pool } from '@odin/db';
 import { RuleSpec } from '@odin/signals';
 import { Rejection } from '@odin/shared';
-import { SUPPORTED_MODELS } from './agents.ts';
+import { modelSchema, providerOf } from './agents.ts';
 
 // in-app only (no external channels): the feed always shows every alert
 const channels = z.array(z.never()).max(0).default([]);
@@ -11,7 +11,7 @@ export const AlertPatch = z.object({ channels: z.array(z.never()).max(0).optiona
 export const ProfileInput = z
   .object({
     mandate: z.string().max(20_000),
-    model: z.enum(SUPPORTED_MODELS),
+    model: modelSchema,
     tokens: z.array(z.string().regex(/^0x[0-9a-fA-F]{40}$/)).min(1).max(20),
     cadenceSeconds: z.number().int().min(300).max(7 * 86_400),
     channels,
@@ -84,9 +84,9 @@ export class AlertService {
     }
     const r = await this.pool.query<{ id: string; version: number }>(
       `INSERT INTO signal_profiles (id, user_id, version, system_prompt, model_provider, model_name, tokens, cadence_seconds, channels, enabled)
-       VALUES (COALESCE($1, gen_random_uuid()), $2, COALESCE((SELECT max(version) FROM signal_profiles WHERE id = $1), 0) + 1, $3, 'anthropic', $4, $5, $6, $7, $8)
+       VALUES (COALESCE($1, gen_random_uuid()), $2, COALESCE((SELECT max(version) FROM signal_profiles WHERE id = $1), 0) + 1, $3, $9, $4, $5, $6, $7, $8)
        RETURNING id, version`,
-      [id ?? null, userId, p.mandate, p.model, tokens, p.cadenceSeconds, p.channels, p.enabled],
+      [id ?? null, userId, p.mandate, p.model, tokens, p.cadenceSeconds, p.channels, p.enabled, providerOf(p.model)],
     );
     if (id) await this.pool.query('UPDATE signal_schedule SET next_run_at = now() WHERE profile_id = $1', [id]);
     return r.rows[0]!;

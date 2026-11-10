@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { ApiFailure, call, fmt, short } from '@/lib/client';
+import { ApiFailure, availableModels, call, fmt, short } from '@/lib/client';
 
 type Any = Record<string, any>;
 const CONDITIONS: Record<string, { label: string; fields: [string, string][] }> = {
@@ -15,13 +15,17 @@ const CONDITIONS: Record<string, { label: string; fields: [string, string][] }> 
 const NUMERIC = new Set(['price', 'pct', 'minutes', 'amount']);
 
 export default function Alerts() {
+  const [models, setModels] = useState<string[]>([]);
+  useEffect(() => {
+    availableModels().then(setModels);
+  }, []);
   const [alerts, setAlerts] = useState<Any[]>([]);
   const [profiles, setProfiles] = useState<Any[]>([]);
   const [signals, setSignals] = useState<Any[]>([]);
   const [cond, setCond] = useState('price_below');
   const [fields, setFields] = useState<Record<string, string>>({});
   const [cooldown, setCooldown] = useState('3600');
-  const [prof, setProf] = useState({ mandate: '', model: 'claude-sonnet-5-5', tokens: '', cadenceSeconds: '3600' });
+  const [prof, setProf] = useState({ mandate: '', model: 'claude-haiku-5-5', tokens: '', cadenceSeconds: '3600' });
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const load = () => {
     call('GET', '/alerts').then(setAlerts).catch((e) => (e.code === 'unauthorized' ? (location.href = '/') : null));
@@ -79,7 +83,7 @@ export default function Alerts() {
         <label>Signal mandate</label>
         <textarea value={prof.mandate} onChange={(e) => setProf({ ...prof, mandate: e.target.value })} placeholder="e.g. Flag strong 1-hour momentum and liquidity drains." />
         <div className="grid" style={{ marginTop: 12 }}>
-          <div><label>Model</label><select value={prof.model} onChange={(e) => setProf({ ...prof, model: e.target.value })}><option>claude-opus-5-5</option><option>claude-sonnet-5-5</option><option>claude-haiku-5-5</option></select></div>
+          <div><label>Model</label><select value={prof.model} onChange={(e) => setProf({ ...prof, model: e.target.value })}>{models.map((m) => <option key={m}>{m}</option>)}</select></div>
           <div><label>Watched token addresses (comma separated)</label><input value={prof.tokens} onChange={(e) => setProf({ ...prof, tokens: e.target.value })} /></div>
           <div><label>Cadence (s, min 300)</label><input value={prof.cadenceSeconds} onChange={(e) => setProf({ ...prof, cadenceSeconds: e.target.value })} /></div>
         </div>

@@ -3,14 +3,18 @@ Description=Odin Agentic agent runtime + scheduler
 After=network-online.target postgresql.service odin-signer.service odin-market.service
 Wants=network-online.target
 # needs the LLM credential; provision.sh only enables this unit once it exists
-ConditionPathExists=/etc/odin/secrets/anthropic.env
+# starts when at least one LLM credential exists (| = any of these)
+ConditionPathExists=|/etc/odin/secrets/anthropic.env
+ConditionPathExists=|/etc/odin/secrets/openrouter.env
 
 [Service]
 Type=simple
 User=odin
 Group=odin
 EnvironmentFile=/etc/odin/chain.env
-EnvironmentFile=/etc/odin/secrets/anthropic.env
+EnvironmentFile=-/etc/odin/secrets/anthropic.env
+EnvironmentFile=-/etc/odin/secrets/openrouter.env
+EnvironmentFile=-/etc/odin/llm.env
 EnvironmentFile=-/etc/odin/build.env
 WorkingDirectory=/opt/odin/app
 ExecStart=/usr/bin/node packages/runtime/src/main.ts

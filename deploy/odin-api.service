@@ -10,6 +10,7 @@ Group=odin
 EnvironmentFile=/etc/odin/chain.env
 EnvironmentFile=/etc/odin/api.env
 EnvironmentFile=-/etc/odin/secrets/anthropic.env
+EnvironmentFile=-/etc/odin/llm.env
 EnvironmentFile=-/etc/odin/build.env
 # services expected on this host (public status page), written by provisioning
 EnvironmentFile=-/etc/odin/watchdog.env

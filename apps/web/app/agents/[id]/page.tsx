@@ -1,13 +1,12 @@
 'use client';
 import { use, useCallback, useEffect, useState } from 'react';
-import { ApiFailure, call, connectedAddress, explorerAddress, explorerTx, fmt, short, signText, units, unusualText, withStepUp } from '@/lib/client';
+import { ApiFailure, availableModels, call, connectedAddress, explorerAddress, explorerTx, fmt, short, signText, units, unusualText, withStepUp } from '@/lib/client';
 
 const AGENT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const odd = <span className="tag warn" title="Contains characters outside plain ASCII, a common trick to imitate a real ticker. Check the address.">unusual characters</span>;
 
 type Any = Record<string, any>;
 const TABS = ['Overview', 'Strategy', 'Assets', 'Risk & TP/SL', 'Backtest', 'Activity', 'Funds'] as const;
-const MODELS = ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'];
 
 function useMsg() {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -154,11 +153,15 @@ function GuardEdit({ onSave }: { onSave: (value: string, mode: string) => void }
 
 function Strategy({ id, agent, reload }: { id: string; agent: Any; reload: () => void }) {
   const c = agent.config ?? {};
+  const [models, setModels] = useState<string[]>([]);
+  useEffect(() => {
+    availableModels().then(setModels);
+  }, []);
   const [f, setF] = useState({
     systemPrompt: c.system_prompt ?? '',
-    model: c.model_name ?? MODELS[0],
+    model: c.model_name ?? 'claude-haiku-5-5',
     quoteAsset: c.quote_symbol === 'WETH' ? 'WETH' : 'USDG',
-    cadenceSeconds: c.cadence_seconds ?? 300,
+    cadenceSeconds: c.cadence_seconds ?? 3600,
     maxTokens: c.max_tokens ?? 16000,
     candlesPeriod: c.context_inputs?.candles?.period_minutes ?? 15,
     candlesCount: c.context_inputs?.candles?.count ?? 16,
@@ -187,7 +190,7 @@ function Strategy({ id, agent, reload }: { id: string; agent: Any; reload: () =>
         <label>Strategy / mandate (your rules — the AI follows these)</label>
         <textarea value={f.systemPrompt} onChange={set('systemPrompt')} placeholder="e.g. Buy TSLA stock token on dips of 3% within a day; take profit gradually; never hold more than two tokens." />
         <div className="grid" style={{ marginTop: 12 }}>
-          <div><label>Model</label><select value={f.model} onChange={set('model')}>{MODELS.map((m) => <option key={m}>{m}</option>)}</select></div>
+          <div><label>Model</label><select value={f.model} onChange={set('model')}>{(models.includes(f.model) ? models : [f.model, ...models]).map((m) => <option key={m}>{m}</option>)}</select></div>
           <div><label>Quote asset (base)</label><select value={f.quoteAsset} onChange={set('quoteAsset')}><option>USDG</option><option value="WETH">ETH (WETH)</option></select></div>
           <div><label>Cadence (seconds, min 60)</label><input type="number" min={60} value={f.cadenceSeconds} onChange={set('cadenceSeconds')} /></div>
           <div><label>Max output tokens</label><input type="number" value={f.maxTokens} onChange={set('maxTokens')} /></div>

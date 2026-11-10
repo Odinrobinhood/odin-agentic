@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { getAddress } from 'viem';
 import { createPool, type Pool } from '@odin/db';
-import { ClaudeProvider, DecisionEngine, PgTokenMeter, type DecisionProvider } from '@odin/decision';
+import { DecisionEngine, PgTokenMeter, providersFromEnv, type DecisionProvider } from '@odin/decision';
 import { Executor, FallbackChain, HttpSignerClient, PgExecutionStore, loadExecutorConfig } from '@odin/executor';
 import { DEFAULT_RISK_CONFIG, PgRiskStore, RiskEngine, ViemBalanceReader, ViemRiskChain, loadReferees } from '@odin/risk';
 import { isOdinChainId } from '@odin/shared';
@@ -45,7 +45,7 @@ export function buildRuntime(env: NodeJS.ProcessEnv = process.env, opts: { provi
 
   const effort = (env.DECISION_EFFORT ?? 'high') as 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   const decision = new DecisionEngine({
-    providers: opts.providers ?? [new ClaudeProvider({ effort })],
+    providers: opts.providers ?? providersFromEnv(env, effort),
     meter: new PgTokenMeter(pool),
     config: { dailyTokenBudget: Number(env.DECISION_DAILY_TOKEN_BUDGET ?? 2_000_000) },
   });

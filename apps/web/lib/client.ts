@@ -83,6 +83,13 @@ export async function withStepUp<T>(fn: () => Promise<T>): Promise<T> {
 /** Symbols/names with characters outside printable ASCII can imitate real tickers (e.g. Cyrillic 'Т' in 'ТSLA'). */
 export const unusualText = (s?: string | null) => !!s && /[^\x20-\x7E]/.test(s);
 
+/** Models this server offers (Claude + operator-allowlisted OpenRouter models), fetched once per page. */
+let modelsCache: Promise<string[]> | null = null;
+export function availableModels(): Promise<string[]> {
+  modelsCache ??= call('GET', '/models').then((r: { id: string }[]) => r.map((m) => m.id)).catch(() => ['claude-haiku-5-5']);
+  return modelsCache;
+}
+
 export const explorerTx = (hash: string) => `https://robinhoodchain.blockscout.com/tx/${hash}`;
 export const explorerAddress = (a: string) => `https://robinhoodchain.blockscout.com/address/${a}`;
 export const short = (a?: string | null) => (a && a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a ?? '');
