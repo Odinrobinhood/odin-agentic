@@ -180,3 +180,12 @@ echo "== public status page and code reference (no account)"
 curl -s -m 20 http://127.0.0.1:7500/v1/public/status | jq -c '{overall, services: [.services[] | "\(.name)=\(.status)"], data}'
 echo "codes documented: $(curl -s -m 10 http://127.0.0.1:7500/v1/public/codes | jq length)"
 echo "web /status: $(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/status)  /docs: $(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/docs)  /api/public/status: $(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/api/public/status)  /api/public/secret: $(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/api/public/agents)"
+
+echo "== web CSP: nonce-based, no 'unsafe-inline' for scripts, every script tag carries the nonce"
+H=$(curl -s -D - -o /tmp/odin-docs.html http://127.0.0.1:3000/docs | tr -d '\r')
+CSP=$(echo "$H" | grep -i '^content-security-policy:' | cut -d' ' -f2-)
+N=$(echo "$CSP" | grep -o "nonce-[^' ]*" | head -1 | cut -c7-)
+echo "script-src: $(echo "$CSP" | tr ';' '\n' | grep script-src)"
+TOTAL=$(grep -o '<script[^>]*>' /tmp/odin-docs.html | wc -l)
+WITH=$(grep -o '<script[^>]*>' /tmp/odin-docs.html | grep -c "nonce=\"$N\"")
+echo "scripts: $TOTAL, with this request's nonce: $WITH"

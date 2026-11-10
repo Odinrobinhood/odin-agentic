@@ -44,7 +44,7 @@ export type SignedIntent = {
 export type SignerDeps = {
   config: Pick<
     SignerConfig,
-    'chainId' | 'router' | 'factory' | 'quoter' | 'maxSlippageBps' | 'usdg' | 'weth' | 'agentDailyCap' | 'guardDailyCapFloor' | 'deadlineSeconds' | 'maxGasLimit' | 'maxFeePerGas'
+    'chainId' | 'router' | 'factory' | 'quoter' | 'maxSlippageBps' | 'usdg' | 'weth' | 'agentDailyCap' | 'withdrawDailyCap' | 'withdrawMaxGas' | 'guardDailyCapFloor' | 'deadlineSeconds' | 'maxGasLimit' | 'maxFeePerGas'
   >;
   seed: Uint8Array;
   policies: PolicyStore;
@@ -246,7 +246,9 @@ export class Signer {
     const gas = BigInt(g.gas);
     const maxFeePerGas = BigInt(g.maxFeePerGas);
     const maxPriorityFeePerGas = BigInt(g.maxPriorityFeePerGas);
-    if (gas === 0n || gas > this.d.config.maxGasLimit) throw new Rejection('gas_limit_exceeded', `gas ${gas} outside (0, ${this.d.config.maxGasLimit}]`);
+    // a withdrawal is one transfer: a tight gas ceiling bounds what a hostile token contract can burn
+    const gasCeiling = kind === 'withdraw' ? this.d.config.withdrawMaxGas : this.d.config.maxGasLimit;
+    if (gas === 0n || gas > gasCeiling) throw new Rejection('gas_limit_exceeded', `gas ${gas} outside (0, ${gasCeiling}]`);
     if (maxFeePerGas > this.d.config.maxFeePerGas) throw new Rejection('fee_cap_exceeded', `maxFeePerGas above cap ${this.d.config.maxFeePerGas}`);
     if (maxPriorityFeePerGas > maxFeePerGas) throw new Rejection('fee_cap_exceeded', 'priority fee above max fee');
     // a zero-fee tx could sit in a nonce forever and stall the wallet
@@ -268,12 +270,16 @@ export class Signer {
     });
     const txHash = keccak256(signedTx);
     const cap =
-      channel === 'agent'
-        ? this.d.config.agentDailyCap
-        : Math.max(this.d.config.guardDailyCapFloor, GUARD_SIGNATURES_PER_POSITION * p.openLivePositions);
-    // recorded (and cap-checked) before the signature leaves the signer
-    // the agent channel may not replace a recent guard exit by reusing its nonce (guards are never blocked by the agent)
-    await this.d.ledger.record({ agentId: p.agentId, channel, kind, txHash, nonce: g.nonce, cap }, this.now());
+      kind === 'withdraw'
+        ? this.d.config.withdrawDailyCap
+        : channel === 'agent'
+          ? this.d.config.agentDailyCap
+          : Math.max(this.d.config.guardDailyCapFloor, GUARD_SIGNATURES_PER_POSITION * p.openLivePositions);
+    // Recorded (and cap-checked) before the signature leaves the signer. Inside the same transaction the ledger
+    // re-reads the agent's status and mode (trades only), closing the gap since the policy was loaded, and keeps
+    // the agent channel from reusing the nonce of a recent guard exit.
+    const statuses = kind === 'withdraw' ? undefined : channel === 'agent' ? ['active'] : ['active', 'paused'];
+    await this.d.ledger.record({ agentId: p.agentId, channel, kind, txHash, nonce: g.nonce, cap, requireLive: statuses }, this.now());
     return { from: p.wallet, to, txHash, signedTx, nonce: g.nonce };
   }
 }

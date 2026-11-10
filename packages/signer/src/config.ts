@@ -22,6 +22,9 @@ export type SignerConfig = {
   agentToken: string;
   guardToken: string;
   agentDailyCap: number;
+  /** Withdrawals have their own daily cap and gas ceiling (they never use up the trading quota). */
+  withdrawDailyCap: number;
+  withdrawMaxGas: bigint;
   /** Floor for the guard quota; the effective quota also scales with open positions. */
   guardDailyCapFloor: number;
   deadlineSeconds: number;
@@ -84,6 +87,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): SignerConfig {
     agentToken: readSecretFile(req(env, 'SIGNER_AGENT_TOKEN_FILE')),
     guardToken: readSecretFile(req(env, 'SIGNER_GUARD_TOKEN_FILE')),
     agentDailyCap: int(env, 'SIGNER_AGENT_DAILY_CAP', 200),
+    withdrawDailyCap: int(env, 'SIGNER_WITHDRAW_DAILY_CAP', 20),
+    withdrawMaxGas: BigInt(int(env, 'SIGNER_WITHDRAW_MAX_GAS', 300_000)),
     guardDailyCapFloor: int(env, 'SIGNER_GUARD_DAILY_CAP_FLOOR', 30),
     deadlineSeconds,
     maxGasLimit: BigInt(int(env, 'SIGNER_MAX_GAS_LIMIT', 5_000_000)),

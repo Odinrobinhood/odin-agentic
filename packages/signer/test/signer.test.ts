@@ -118,6 +118,8 @@ function build(over: Partial<SignerDeps['config']> = {}) {
       usdg: USDG,
       weth: WETH,
       agentDailyCap: 10,
+      withdrawDailyCap: 3,
+      withdrawMaxGas: 300_000n,
       guardDailyCapFloor: 4,
       deadlineSeconds: 60,
       maxGasLimit: 5_000_000n,
@@ -336,17 +338,18 @@ describe('preflight', () => {
 });
 
 describe('withdraw', () => {
+  const wgas: GasParams = { ...gas, gas: '120000' };
   const transferAbi = parseAbi(['function transfer(address to, uint256 amount) returns (bool)']);
 
   it('sends ERC-20s and native ETH only to the owner, for any agent status', async () => {
     policies.policy = makePolicy({ status: 'retired' });
-    const erc20 = await signer.withdraw({ agentId: AGENT_ID, token: USDG, amount: '123', gasParams: gas }, 'agent');
+    const erc20 = await signer.withdraw({ agentId: AGENT_ID, token: USDG, amount: '123', gasParams: wgas }, 'agent');
     const tx = parseTransaction(erc20.signedTx);
     expect(tx.to).toBe(USDG);
     expect(decodeFunctionData({ abi: transferAbi, data: tx.data! }).args).toEqual([OWNER.address, 123n]);
     expect(erc20.recipient).toBe(OWNER.address);
 
-    const eth = await signer.withdraw({ agentId: AGENT_ID, token: null, amount: '1000', gasParams: { ...gas, nonce: 4 } }, 'agent');
+    const eth = await signer.withdraw({ agentId: AGENT_ID, token: null, amount: '1000', gasParams: { ...wgas, nonce: 4 } }, 'agent');
     const etx = parseTransaction(eth.signedTx);
     expect(getAddress(etx.to!)).toBe(OWNER.address);
     expect(etx.value).toBe(1000n);
@@ -355,9 +358,17 @@ describe('withdraw', () => {
 
   it('has no recipient field, refuses the guard channel and zero amounts', async () => {
     expect(WithdrawRequest.safeParse({ agentId: AGENT_ID, token: null, amount: '1', gasParams: gas, recipient: ATTACKER }).success).toBe(false);
-    await rejects(signer.withdraw({ agentId: AGENT_ID, token: null, amount: '1', gasParams: gas }, 'guard'), 'unauthorized');
-    await rejects(signer.withdraw({ agentId: AGENT_ID, token: null, amount: '0', gasParams: gas }, 'agent'), 'amount_invalid');
-    await rejects(signer.withdraw({ agentId: '22222222-2222-4222-8222-222222222222', token: null, amount: '1', gasParams: gas }, 'agent'), 'unknown_agent');
+    await rejects(signer.withdraw({ agentId: AGENT_ID, token: null, amount: '1', gasParams: wgas }, 'guard'), 'unauthorized');
+    await rejects(signer.withdraw({ agentId: AGENT_ID, token: null, amount: '0', gasParams: wgas }, 'agent'), 'amount_invalid');
+    await rejects(signer.withdraw({ agentId: '22222222-2222-4222-8222-222222222222', token: null, amount: '1', gasParams: wgas }, 'agent'), 'unknown_agent');
+  });
+
+  it('has its own gas ceiling and daily cap, separate from trading', async () => {
+    await rejects(signer.withdraw({ agentId: AGENT_ID, token: USDG, amount: '1', gasParams: { ...wgas, gas: '300001' } }, 'agent'), 'gas_limit_exceeded');
+    for (let i = 0; i < 3; i++) await signer.withdraw({ agentId: AGENT_ID, token: USDG, amount: String(i + 1), gasParams: { ...wgas, nonce: 20 + i } }, 'agent');
+    await rejects(signer.withdraw({ agentId: AGENT_ID, token: USDG, amount: '9', gasParams: { ...wgas, nonce: 30 } }, 'agent'), 'signature_cap_reached');
+    // trading quota untouched by withdrawals
+    await expect(signer.swap(swapReq(buyTsla, { gasParams: { ...gas, nonce: 31 } }), 'agent')).resolves.toBeTruthy();
   });
 });
 

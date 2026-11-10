@@ -10,6 +10,8 @@ export type LedgerEntry = {
   txHash: string;
   nonce: number;
   cap: number;
+  /** Trades: the agent must still be live with one of these statuses when the signature is recorded. */
+  requireLive?: string[];
 };
 
 export interface Ledger {
@@ -57,10 +59,18 @@ export class PgLedger implements Ledger {
         );
         if (g.rowCount) throw new Rejection('nonce_reserved_by_guard', `nonce ${e.nonce} belongs to a pending guard exit`);
       }
+      if (e.requireLive) {
+        const a = await client.query<{ status: string; mode: string }>('SELECT status, mode FROM agents WHERE id = $1', [e.agentId]);
+        const row = a.rows[0];
+        if (!row || row.mode !== 'live' || !e.requireLive.includes(row.status)) {
+          throw new Rejection('agent_not_active', `agent is ${row ? `${row.status}/${row.mode}` : 'gone'}; nothing signed`);
+        }
+      }
       const day = utcDay(now);
+      // withdrawals and trades have separate daily caps
       const used = await client.query<{ n: string }>(
-        'SELECT count(*) AS n FROM signer.signatures WHERE agent_id = $1 AND channel = $2 AND day = $3',
-        [e.agentId, e.channel, day],
+        `SELECT count(*) AS n FROM signer.signatures WHERE agent_id = $1 AND channel = $2 AND day = $3 AND (kind = 'withdraw') = $4`,
+        [e.agentId, e.channel, day, e.kind === 'withdraw'],
       );
       if (Number(used.rows[0]?.n ?? 0) >= e.cap) {
         throw new Rejection('signature_cap_reached', `${e.channel} signature cap of ${e.cap}/day reached`);
@@ -93,7 +103,7 @@ export class MemoryLedger implements Ledger {
       throw new Rejection('nonce_reserved_by_guard', `nonce ${e.nonce} belongs to a pending guard exit`);
     }
     const day = utcDay(now);
-    const used = this.rows.filter((r) => r.agentId === e.agentId && r.channel === e.channel && r.day === day).length;
+    const used = this.rows.filter((r) => r.agentId === e.agentId && r.channel === e.channel && r.day === day && (r.kind === 'withdraw') === (e.kind === 'withdraw')).length;
     if (used >= e.cap) throw new Rejection('signature_cap_reached', `${e.channel} signature cap of ${e.cap}/day reached`);
     this.rows.push({ ...e, day, at: now.getTime() });
   }

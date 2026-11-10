@@ -84,8 +84,7 @@ psql_su -d odin -c "
   REVOKE ALL ON ALL TABLES IN SCHEMA signer FROM odin, odin_signer;
   GRANT USAGE ON SCHEMA signer TO odin, odin_signer;
   GRANT SELECT ON ALL TABLES IN SCHEMA signer TO odin;
-  GRANT SELECT, INSERT ON ALL TABLES IN SCHEMA signer TO odin_signer;
-  REVOKE INSERT ON signer_signatures, signer_exports FROM odin_signer;"
+  GRANT SELECT, INSERT ON ALL TABLES IN SCHEMA signer TO odin_signer;"
 
 # --- signer service ------------------------------------------------------------------------------
 install -m 0644 "$APP/deploy/odin-signer.service" /etc/systemd/system/odin-signer.service
