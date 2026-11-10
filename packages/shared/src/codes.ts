@@ -6,6 +6,7 @@ export const REJECTION_CODES = [
   // auth / transport
   'unauthorized',
   'bad_request',
+  'rate_limited',
   // agent state
   'unknown_agent',
   'agent_not_active',

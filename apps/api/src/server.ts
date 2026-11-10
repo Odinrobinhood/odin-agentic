@@ -30,7 +30,7 @@ export type ApiDeps = {
 
 type Authed = FastifyRequest & { user: { userId: string; address: Address; family: string } };
 
-const STATUS: Partial<Record<RejectionCode, number>> = { unauthorized: 401, bad_request: 400, unknown_agent: 404 };
+const STATUS: Partial<Record<RejectionCode, number>> = { unauthorized: 401, bad_request: 400, unknown_agent: 404, rate_limited: 429 };
 
 function parse<S extends ZodTypeAny>(schema: S, body: unknown): z.infer<S> {
   const r = schema.safeParse(body ?? {});
@@ -75,11 +75,11 @@ export function buildServer(d: ApiDeps): FastifyInstance {
     const h = req.headers.authorization ?? '';
     if (!h.startsWith('Bearer ')) throw new Rejection('unauthorized', 'missing bearer token');
     const u = await d.auth.authenticate(h.slice(7));
-    if (!win.take(`u:${u.userId}`, limits.perUserPerMinute)) throw new Rejection('bad_request', 'rate limited');
+    if (!win.take(`u:${u.userId}`, limits.perUserPerMinute)) throw new Rejection('rate_limited', 'too many requests');
     (req as Authed).user = u;
   };
   const ipLimited = async (req: FastifyRequest) => {
-    if (!win.take(`ip:${req.ip}`, limits.perIpPerMinute)) throw new Rejection('bad_request', 'rate limited');
+    if (!win.take(`ip:${req.ip}`, limits.perIpPerMinute)) throw new Rejection('rate_limited', 'too many requests');
   };
   const uid = (req: FastifyRequest) => (req as Authed).user.userId;
   const aid = (req: FastifyRequest) => (req.params as { id: string }).id;
@@ -138,7 +138,7 @@ export function buildServer(d: ApiDeps): FastifyInstance {
   app.post('/v1/agents/:id/mode', { preHandler: authed }, async (req) => {
     const { mode } = parse(ModeInput, req.body);
     // real funds: going live needs a fresh wallet signature
-    if (mode === 'live') await d.auth.requireFreshSiwe(uid(req), stepUp);
+    if (mode === 'live') await d.auth.requireFreshSiwe((req as Authed).user.family, stepUp);
     await d.agents.setMode(uid(req), aid(req), mode);
     return { mode };
   });
@@ -240,7 +240,7 @@ export function buildServer(d: ApiDeps): FastifyInstance {
   // ── funds (architecture §6): recipient is always the owner; sensitive actions need a fresh SIWE ─────────
   app.post('/v1/agents/:id/withdraw', { preHandler: authed }, async (req) => {
     await d.agents.owned(uid(req), aid(req));
-    await d.auth.requireFreshSiwe(uid(req), stepUp);
+    await d.auth.requireFreshSiwe((req as Authed).user.family, stepUp);
     return json(await d.funds.withdraw(aid(req), parse(WithdrawInput, req.body)));
   });
   app.get('/v1/agents/:id/withdrawals', { preHandler: authed }, async (req) => {
@@ -249,12 +249,12 @@ export function buildServer(d: ApiDeps): FastifyInstance {
   });
   app.post('/v1/agents/:id/export/message', { preHandler: authed }, async (req) => {
     await d.agents.owned(uid(req), aid(req));
-    await d.auth.requireFreshSiwe(uid(req), stepUp);
+    await d.auth.requireFreshSiwe((req as Authed).user.family, stepUp);
     return d.funds.exportMessage(aid(req));
   });
   app.post('/v1/agents/:id/export', { preHandler: authed }, async (req, reply) => {
     await d.agents.owned(uid(req), aid(req));
-    await d.auth.requireFreshSiwe(uid(req), stepUp);
+    await d.auth.requireFreshSiwe((req as Authed).user.family, stepUp);
     const out = await d.funds.exportKey(aid(req), parse(ExportInput, req.body));
     reply.header('cache-control', 'no-store');
     return out;

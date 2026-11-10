@@ -55,6 +55,7 @@ export class AuthService {
     if (!(await this.verify({ address: fields.address, message, signature }))) throw new Rejection('unauthorized', 'bad signature');
 
     // consume the nonce atomically; a replayed message fails here
+    await this.pool.query("DELETE FROM siwe_nonces WHERE expires_at < now() - interval '1 day'");
     const used = await this.pool.query('UPDATE siwe_nonces SET used_at = now() WHERE nonce = $1 AND used_at IS NULL AND expires_at > $2', [fields.nonce, this.now()]);
     if (used.rowCount !== 1) throw new Rejection('unauthorized', 'unknown, used or expired nonce');
 
@@ -70,7 +71,8 @@ export class AuthService {
        ON CONFLICT (user_id, address) DO UPDATE SET kind = 'siwe'`,
       [u.rows[0]!.id, address.toLowerCase()],
     );
-    return this.issue(u.rows[0]!.id, address, randomUUID(), userAgent);
+    const nowD = this.now();
+    return this.issue(u.rows[0]!.id, address, randomUUID(), userAgent, this.pool, { siweAt: nowD, familyExpiresAt: new Date(nowD.getTime() + this.cfg.refreshTtlSeconds * 1000) });
   }
 
   /** Rotate a refresh token. Presenting an already-rotated token revokes its whole family. */
@@ -78,8 +80,8 @@ export class AuthService {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
-      const r = await client.query<{ id: string; user_id: string; family: string; expires_at: Date; rotated_at: Date | null; revoked_at: Date | null; wallet_address: string }>(
-        `SELECT s.id, s.user_id, s.family, s.expires_at, s.rotated_at, s.revoked_at, u.wallet_address
+      const r = await client.query<{ id: string; user_id: string; family: string; expires_at: Date; rotated_at: Date | null; revoked_at: Date | null; wallet_address: string; siwe_at: Date | null; family_expires_at: Date }>(
+        `SELECT s.id, s.user_id, s.family, s.expires_at, s.rotated_at, s.revoked_at, s.siwe_at, s.family_expires_at, u.wallet_address
            FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = $1 FOR UPDATE OF s`,
         [sha256(refreshToken)],
       );
@@ -90,9 +92,9 @@ export class AuthService {
         await client.query('COMMIT');
         throw new Rejection('unauthorized', 'refresh token reuse detected; session revoked');
       }
-      if (s.expires_at <= this.now()) throw new Rejection('unauthorized', 'refresh token expired');
+      if (s.expires_at <= this.now() || s.family_expires_at <= this.now()) throw new Rejection('unauthorized', 'refresh token expired');
       await client.query('UPDATE sessions SET rotated_at = now() WHERE id = $1', [s.id]);
-      const tokens = await this.issue(s.user_id, getAddress(s.wallet_address), s.family, userAgent, client);
+      const tokens = await this.issue(s.user_id, getAddress(s.wallet_address), s.family, userAgent, client, { siweAt: s.siwe_at, familyExpiresAt: s.family_expires_at });
       await client.query('COMMIT');
       return tokens;
     } catch (e) {
@@ -126,13 +128,21 @@ export class AuthService {
   }
 
   /** Step-up (architecture §3.2): sensitive actions require a SIWE signature newer than `maxAgeSeconds`. */
-  async requireFreshSiwe(userId: string, maxAgeSeconds: number): Promise<void> {
-    const r = await this.pool.query<{ last_siwe_at: Date | null }>('SELECT last_siwe_at FROM users WHERE id = $1', [userId]);
-    const t = r.rows[0]?.last_siwe_at;
+  async requireFreshSiwe(family: string, maxAgeSeconds: number): Promise<void> {
+    // per session family: a fresh sign-in on another device does not unlock this session
+    const r = await this.pool.query<{ siwe_at: Date | null }>('SELECT max(siwe_at) AS siwe_at FROM sessions WHERE family = $1 AND revoked_at IS NULL', [family]);
+    const t = r.rows[0]?.siwe_at;
     if (!t || this.now().getTime() - t.getTime() > maxAgeSeconds * 1000) throw new Rejection('unauthorized', 'step-up required: sign in with your wallet again');
   }
 
-  private async issue(userId: string, address: Address, family: string, userAgent?: string, db: Pick<Pool, 'query'> = this.pool): Promise<Tokens> {
+  private async issue(
+    userId: string,
+    address: Address,
+    family: string,
+    userAgent: string | undefined,
+    db: Pick<Pool, 'query'>,
+    f: { siweAt: Date | null; familyExpiresAt: Date },
+  ): Promise<Tokens> {
     const now = Math.floor(this.now().getTime() / 1000);
     const accessToken = await new SignJWT({ addr: address, fam: family, auth_at: now })
       .setProtectedHeader({ alg: 'HS256' })
@@ -143,8 +153,8 @@ export class AuthService {
       .sign(this.cfg.jwtKey);
     const refreshToken = randomBytes(32).toString('base64url');
     await db.query(
-      'INSERT INTO sessions (user_id, family, token_hash, user_agent, expires_at) VALUES ($1, $2, $3, $4, $5)',
-      [userId, family, sha256(refreshToken), userAgent?.slice(0, 300) ?? null, new Date((now + this.cfg.refreshTtlSeconds) * 1000)],
+      'INSERT INTO sessions (user_id, family, token_hash, user_agent, expires_at, siwe_at, family_expires_at) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+      [userId, family, sha256(refreshToken), userAgent?.slice(0, 300) ?? null, new Date(Math.min((now + this.cfg.refreshTtlSeconds) * 1000, f.familyExpiresAt.getTime())), f.siweAt, f.familyExpiresAt],
     );
     return { accessToken, refreshToken, expiresIn: this.cfg.accessTtlSeconds, userId, address };
   }
