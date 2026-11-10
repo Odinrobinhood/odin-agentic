@@ -1,5 +1,6 @@
 import { getAddress, type Address } from 'viem';
 import type { Pool } from '@odin/db';
+import { Rejection } from '@odin/shared';
 
 export type AgentPolicy = {
   agentId: string;
@@ -22,14 +23,35 @@ export interface PolicyStore {
   walletOwner(agentId: string): Promise<WalletOwner | null>;
 }
 
-/** Reads policy straight from Postgres with the signer's read-only role; nothing comes from the caller. */
+/**
+ * Reads policy from Postgres with the signer's role; nothing comes from the caller.
+ *
+ * Custody facts (agent -> derivation index -> wallet -> owner) come ONLY from the signer vault (schema
+ * `signer`, append-only, not writable by the app role). A binding is written the first time the signer
+ * sees an agent wallet, after checking the address really derives from that index; app tables can never
+ * re-point an agent at another key or another owner afterwards.
+ */
 export class PgPolicyStore implements PolicyStore {
   private readonly pool: Pool;
-  constructor(pool: Pool) {
+  private readonly deriveAddress: (index: bigint) => Address;
+  constructor(pool: Pool, deriveAddress: (index: bigint) => Address) {
     this.pool = pool;
+    this.deriveAddress = deriveAddress;
   }
 
-  async walletOwner(agentId: string): Promise<WalletOwner | null> {
+  private async readBinding(agentId: string): Promise<WalletOwner | null> {
+    const b = await this.pool.query<{ derivation_index: string; wallet: string; owner: string }>(
+      'SELECT derivation_index, wallet, owner FROM signer.wallet_bindings WHERE agent_id = $1',
+      [agentId],
+    );
+    const x = b.rows[0];
+    return x ? { agentId, derivationIndex: BigInt(x.derivation_index), wallet: getAddress(x.wallet), owner: getAddress(x.owner) } : null;
+  }
+
+  /** The vault binding for an agent, created on first sight. Null if the agent has no derived wallet. */
+  async binding(agentId: string): Promise<WalletOwner | null> {
+    const bound = await this.readBinding(agentId);
+    if (bound) return bound;
     const r = await this.pool.query<{ derivation_index: string; address: string; custody: string; owner: string }>(
       `SELECT w.derivation_index, w.address, w.custody, u.wallet_address AS owner
          FROM agents a JOIN agent_wallets w ON w.agent_id = a.id JOIN users u ON u.id = a.user_id
@@ -38,7 +60,40 @@ export class PgPolicyStore implements PolicyStore {
     );
     const x = r.rows[0];
     if (!x || x.custody !== 'derived') return null;
-    return { agentId, derivationIndex: BigInt(x.derivation_index), wallet: getAddress(x.address), owner: getAddress(x.owner) };
+    const index = BigInt(x.derivation_index);
+    if (this.deriveAddress(index) !== getAddress(x.address)) {
+      throw new Rejection('unknown_agent', `agent wallet ${x.address} does not derive from index ${index}`);
+    }
+    // ON CONFLICT DO NOTHING covers every unique key: an index or wallet already bound to ANOTHER agent stays unbound
+    await this.pool.query(
+      'INSERT INTO signer.wallet_bindings (agent_id, derivation_index, wallet, owner) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING',
+      [agentId, index.toString(), getAddress(x.address).toLowerCase(), getAddress(x.owner).toLowerCase()],
+    );
+    const fresh = await this.readBinding(agentId);
+    if (!fresh) throw new Rejection('unknown_agent', `derivation index ${index} is already bound to another agent`);
+    return fresh;
+  }
+
+  /** Bind every agent wallet the vault has not seen yet (runs periodically so bindings exist before funds arrive). */
+  async bindAll(): Promise<number> {
+    const r = await this.pool.query<{ agent_id: string }>(
+      `SELECT w.agent_id FROM agent_wallets w
+        WHERE w.custody = 'derived' AND NOT EXISTS (SELECT 1 FROM signer.wallet_bindings b WHERE b.agent_id = w.agent_id)
+        LIMIT 500`,
+    );
+    let n = 0;
+    for (const { agent_id } of r.rows) {
+      try {
+        if (await this.binding(agent_id)) n++;
+      } catch (e) {
+        console.error(JSON.stringify({ msg: 'wallet binding refused', agentId: agent_id, error: (e as Error).message }));
+      }
+    }
+    return n;
+  }
+
+  walletOwner(agentId: string): Promise<WalletOwner | null> {
+    return this.binding(agentId);
   }
 
   async load(agentId: string): Promise<AgentPolicy | null> {
@@ -59,6 +114,11 @@ export class PgPolicyStore implements PolicyStore {
     if (!row || row.quote_asset === null) return null;
     // Imported keys are not held by the signer; only derived wallets can be signed for.
     if (row.custody !== 'derived') return null;
+    const vault = await this.binding(agentId);
+    if (!vault) return null;
+    if (vault.wallet !== getAddress(row.address) || vault.derivationIndex !== BigInt(row.derivation_index)) {
+      throw new Rejection('unknown_agent', 'agent wallet in app tables does not match the signer vault binding');
+    }
 
     const assets = await this.pool.query<{ token_address: string; is_stock_token: boolean }>(
       `SELECT aa.token_address, t.is_stock_token
@@ -92,8 +152,8 @@ export class PgPolicyStore implements PolicyStore {
     return {
       agentId,
       status: row.status,
-      derivationIndex: BigInt(row.derivation_index),
-      wallet: getAddress(row.address),
+      derivationIndex: vault.derivationIndex,
+      wallet: vault.wallet,
       quoteAsset,
       assets: assetSet,
       stockTokens,

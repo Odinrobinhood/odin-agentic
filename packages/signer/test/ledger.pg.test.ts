@@ -43,7 +43,7 @@ describe.skipIf(!url)('PgLedger (postgres)', () => {
     const e = { agentId, channel: 'guard' as const, kind: 'approve' as const, txHash, nonce: 1, cap: 100 };
     await ledger.record(e, new Date());
     await expect(ledger.record(e, new Date())).resolves.toBeUndefined();
-    const n = await pool.query('SELECT count(*)::int AS n FROM signer_signatures WHERE tx_hash = $1', [txHash]);
+    const n = await pool.query('SELECT count(*)::int AS n FROM signer.signatures WHERE tx_hash = $1', [txHash]);
     expect(n.rows[0].n).toBe(1);
   });
 

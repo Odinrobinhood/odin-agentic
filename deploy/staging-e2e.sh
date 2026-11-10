@@ -15,6 +15,16 @@ TMP=$(mktemp -d) && cp -r "$APP/." "$TMP/" && chown -R odin "$TMP"
   node_modules/.bin/vitest run 2>&1 | grep -E 'Test Files|Tests |FAIL|×|skipped')
 rm -rf "$TMP"
 
+echo "== signer vault is append-only and out of the app role's reach (each line must say DENIED)"
+deny() { if sudo -u "$1" psql -qtAX -d odin -c "$2" >/dev/null 2>&1; then echo "ALLOWED (BAD): $1: $2"; else echo "DENIED: $1: $2"; fi; }
+deny odin "UPDATE signer.wallet_bindings SET owner = owner"
+deny odin "DELETE FROM signer.signatures WHERE false"
+deny odin "INSERT INTO signer.exports (nonce, agent_id) VALUES ('x', gen_random_uuid())"
+deny odin "DROP TABLE signer.exports"
+deny odin "ALTER SCHEMA signer OWNER TO odin"
+deny odin-signer "UPDATE signer.wallet_bindings SET owner = owner"
+deny odin-signer "DELETE FROM signer.signatures WHERE false"
+
 echo "== live signer over HTTP (mainnet chain reads, nothing is broadcast)"
 AT=$(cat /etc/odin/secrets/signer-agent.token)
 GT=$(cat /etc/odin/secrets/signer-guard.token)
@@ -78,7 +88,7 @@ else
   echo "NVDA not in the catalog yet"
 fi
 echo "-- ledger rows:"
-psql_su -d odin -c "SELECT channel, kind, count(*) FROM signer_signatures WHERE agent_id='$AGENT' GROUP BY 1,2 ORDER BY 1,2"
+psql_su -d odin -c "SELECT channel, kind, count(*) FROM signer.signatures WHERE agent_id='$AGENT' GROUP BY 1,2 ORDER BY 1,2"
 echo "-- signer DB role cannot write policy tables:"
 sudo -u odin-signer psql -d odin -U odin_signer -qtAX -c "UPDATE agents SET status='active'" 2>&1 | head -1 || true  # expected to fail
 

@@ -73,6 +73,20 @@ systemctl reload postgresql
 systemctl stop odin-market odin-indexer odin-signals odin-watchdog odin-notifier odin-api odin-web odin-runtime odin-backtest 2>/dev/null || true
 sudo -u odin env DATABASE_URL='postgresql://odin@/odin?host=/var/run/postgresql' node "$APP/packages/db/src/migrate.ts"
 
+# Signer vault (migration 018): owned by a NOLOGIN role so neither the app role (owner of every public table)
+# nor the signer itself can UPDATE/DELETE custody bindings, the ledger or burnt export nonces.
+psql_su -c "SELECT 1 FROM pg_roles WHERE rolname='odin_vault'" | grep -q 1 || psql_su -c "CREATE ROLE odin_vault NOLOGIN"
+psql_su -d odin -c "
+  ALTER SCHEMA signer OWNER TO odin_vault;
+  ALTER TABLE signer.wallet_bindings OWNER TO odin_vault;
+  ALTER TABLE signer.signatures OWNER TO odin_vault;
+  ALTER TABLE signer.exports OWNER TO odin_vault;
+  REVOKE ALL ON ALL TABLES IN SCHEMA signer FROM odin, odin_signer;
+  GRANT USAGE ON SCHEMA signer TO odin, odin_signer;
+  GRANT SELECT ON ALL TABLES IN SCHEMA signer TO odin;
+  GRANT SELECT, INSERT ON ALL TABLES IN SCHEMA signer TO odin_signer;
+  REVOKE INSERT ON signer_signatures, signer_exports FROM odin_signer;"
+
 # --- signer service ------------------------------------------------------------------------------
 install -m 0644 "$APP/deploy/odin-signer.service" /etc/systemd/system/odin-signer.service
 systemctl daemon-reload

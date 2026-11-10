@@ -33,7 +33,7 @@ export class PgLedger implements Ledger {
   }
 
   async burnExportNonce(nonce: string, agentId: string): Promise<boolean> {
-    const r = await this.pool.query('INSERT INTO signer_exports (nonce, agent_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [nonce, agentId]);
+    const r = await this.pool.query('INSERT INTO signer.exports (nonce, agent_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [nonce, agentId]);
     return r.rowCount === 1;
   }
 
@@ -44,21 +44,21 @@ export class PgLedger implements Ledger {
       // serialise all signatures of one agent+channel so the count cannot race
       await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`${e.agentId}:${e.channel}`]);
       // re-signing byte-identical tx data yields the same hash: idempotent, not a new signature
-      const seen = await client.query('SELECT 1 FROM signer_signatures WHERE tx_hash = $1 AND agent_id = $2', [e.txHash, e.agentId]);
+      const seen = await client.query('SELECT 1 FROM signer.signatures WHERE tx_hash = $1 AND agent_id = $2', [e.txHash, e.agentId]);
       if (seen.rowCount) {
         await client.query('COMMIT');
         return;
       }
       const day = utcDay(now);
       const used = await client.query<{ n: string }>(
-        'SELECT count(*) AS n FROM signer_signatures WHERE agent_id = $1 AND channel = $2 AND day = $3',
+        'SELECT count(*) AS n FROM signer.signatures WHERE agent_id = $1 AND channel = $2 AND day = $3',
         [e.agentId, e.channel, day],
       );
       if (Number(used.rows[0]?.n ?? 0) >= e.cap) {
         throw new Rejection('signature_cap_reached', `${e.channel} signature cap of ${e.cap}/day reached`);
       }
       await client.query(
-        'INSERT INTO signer_signatures (agent_id, channel, kind, day, tx_hash, nonce) VALUES ($1, $2, $3, $4, $5, $6)',
+        'INSERT INTO signer.signatures (agent_id, channel, kind, day, tx_hash, nonce) VALUES ($1, $2, $3, $4, $5, $6)',
         [e.agentId, e.channel, e.kind, day, e.txHash, e.nonce],
       );
       await client.query('COMMIT');
