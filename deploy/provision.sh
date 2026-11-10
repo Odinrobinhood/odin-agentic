@@ -136,13 +136,14 @@ systemctl --no-pager --lines=3 status odin-guard || true
 
 # --- agent runtime (needs ANTHROPIC_API_KEY=... in /etc/odin/secrets/anthropic.env, mode 0440 root:odin) --------
 install -m 0644 "$APP/deploy/odin-runtime.service" /etc/systemd/system/odin-runtime.service
+install -m 0644 "$APP/deploy/odin-backtest.service" /etc/systemd/system/odin-backtest.service
 systemctl daemon-reload
 if [ -f /etc/odin/secrets/anthropic.env ]; then
   chown root:odin /etc/odin/secrets/anthropic.env && chmod 0440 /etc/odin/secrets/anthropic.env
-  systemctl enable odin-runtime >/dev/null 2>&1
-  systemctl restart odin-runtime
+  systemctl enable odin-runtime odin-backtest >/dev/null 2>&1
+  systemctl restart odin-runtime odin-backtest
   sleep 3
   systemctl --no-pager --lines=4 status odin-runtime || true
 else
-  echo "odin-runtime: not started (no /etc/odin/secrets/anthropic.env)"
+  echo "odin-runtime, odin-backtest: not started (no /etc/odin/secrets/anthropic.env)"
 fi

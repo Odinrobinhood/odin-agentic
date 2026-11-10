@@ -29,6 +29,9 @@ importers:
       '@odin/analyst':
         specifier: workspace:*
         version: link:../../packages/analyst
+      '@odin/backtest':
+        specifier: workspace:*
+        version: link:../../packages/backtest
       '@odin/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -102,6 +105,24 @@ importers:
       '@anthropic-ai/sdk':
         specifier: 1.1.0
         version: 1.1.0(zod@3.25.76)
+      '@odin/db':
+        specifier: workspace:*
+        version: link:../db
+      '@odin/decision':
+        specifier: workspace:*
+        version: link:../decision
+      '@odin/shared':
+        specifier: workspace:*
+        version: link:../shared
+      pg:
+        specifier: 8.13.1
+        version: 8.13.1
+      viem:
+        specifier: 2.21.54
+        version: 2.21.54(typescript@5.8.3)(zod@3.25.76)
+
+  packages/backtest:
+    dependencies:
       '@odin/db':
         specifier: workspace:*
         version: link:../db

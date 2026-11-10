@@ -4,6 +4,7 @@ import { getAddress, type Address, type Hex } from 'viem';
 import { Rejection, type RejectionCode } from '@odin/shared';
 import type { AuthService } from './auth.ts';
 import type { AnalystEngine, AnalystStore } from '@odin/analyst';
+import { BacktestInput, type BacktestService } from './backtests.ts';
 import { AlertInput, AlertPatch, ProfileInput, type AlertService } from './alerts.ts';
 import { ChannelsInput, type NotificationService } from './notifications.ts';
 import { CloseAllInput, ExportInput, WithdrawInput, type FundsService } from './funds.ts';
@@ -16,6 +17,7 @@ export type ApiDeps = {
   notifications: NotificationService;
   analyst: { engine: AnalystEngine; store: AnalystStore };
   alerts: AlertService;
+  backtests: BacktestService;
   portfolio: { forUser(userId: string): Promise<unknown>; wallet(address: Address, kind?: string, label?: string | null): Promise<unknown> };
   pool: { query: (sql: string, params?: unknown[]) => Promise<{ rowCount: number | null; rows: any[] }> };
   setPaperBalance: (agentId: string, quote: Address, raw: bigint) => Promise<void>;
@@ -146,6 +148,20 @@ export function buildServer(d: ApiDeps): FastifyInstance {
   app.get('/v1/agents/:id/decisions', { preHandler: authed }, async (req) => json(await d.agents.decisions(uid(req), aid(req), Number((req.query as { limit?: string }).limit ?? 50))));
   app.get('/v1/agents/:id/positions', { preHandler: authed }, async (req) => json(await d.agents.positions(uid(req), aid(req))));
   app.get('/v1/agents/:id/executions', { preHandler: authed }, async (req) => json(await d.agents.executions(uid(req), aid(req), Number((req.query as { limit?: string }).limit ?? 50))));
+
+  // ── backtests (architecture §3.4) ─────────────────────────────────────────────
+  app.post('/v1/agents/:id/backtests', { preHandler: authed }, async (req) => {
+    await d.agents.owned(uid(req), aid(req));
+    return d.backtests.create(uid(req), aid(req), parse(BacktestInput, req.body));
+  });
+  app.get('/v1/agents/:id/backtests', { preHandler: authed }, async (req) => {
+    await d.agents.owned(uid(req), aid(req));
+    return json(await d.backtests.list(aid(req)));
+  });
+  app.get('/v1/agents/:id/backtests/:bid', { preHandler: authed }, async (req) => {
+    await d.agents.owned(uid(req), aid(req));
+    return json(await d.backtests.get(aid(req), (req.params as { bid: string }).bid));
+  });
 
   // ── signals & alerts (architecture §3.14): information only, never trades ──────────────────────────
   const pid = (req: FastifyRequest) => (req.params as { pid: string }).pid;

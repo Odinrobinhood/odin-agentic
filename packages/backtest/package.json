@@ -1,0 +1,15 @@
+{
+  "name": "@odin/backtest",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "start": "node src/main.ts" },
+  "dependencies": {
+    "@odin/db": "workspace:*",
+    "@odin/decision": "workspace:*",
+    "@odin/shared": "workspace:*",
+    "pg": "8.13.1",
+    "viem": "2.21.54"
+  }
+}

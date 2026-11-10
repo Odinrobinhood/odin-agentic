@@ -3,7 +3,7 @@ import { use, useCallback, useEffect, useState } from 'react';
 import { ApiFailure, call, connectedAddress, explorerAddress, explorerTx, fmt, short, signText, units, withStepUp } from '@/lib/client';
 
 type Any = Record<string, any>;
-const TABS = ['Overview', 'Strategy', 'Assets', 'Risk & TP/SL', 'Activity', 'Funds'] as const;
+const TABS = ['Overview', 'Strategy', 'Assets', 'Risk & TP/SL', 'Backtest', 'Activity', 'Funds'] as const;
 const MODELS = ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'];
 
 function useMsg() {
@@ -47,6 +47,7 @@ export default function AgentPage({ params }: { params: Promise<{ id: string }> 
       {tab === 'Strategy' && <Strategy id={id} agent={agent} reload={reload} />}
       {tab === 'Assets' && <Assets id={id} agent={agent} reload={reload} />}
       {tab === 'Risk & TP/SL' && <RiskTpSl id={id} agent={agent} reload={reload} />}
+      {tab === 'Backtest' && <Backtest id={id} />}
       {tab === 'Activity' && <Activity id={id} />}
       {tab === 'Funds' && <Funds id={id} agent={agent} />}
     </>
@@ -329,6 +330,96 @@ function RiskTpSl({ id, agent, reload }: { id: string; agent: Any; reload: () =>
       </div>
       {view}
     </>
+  );
+}
+
+const localInput = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+
+function Backtest({ id }: { id: string }) {
+  const [form, setForm] = useState({ from: localInput(new Date(Date.now() - 6 * 3600_000)), to: localInput(new Date()), capital: '1000' });
+  const [runs, setRuns] = useState<Any[]>([]);
+  const [open, setOpen] = useState<Any | null>(null);
+  const { run, view } = useMsg();
+  const load = useCallback(() => call('GET', `/agents/${id}/backtests`).then(setRuns).catch(() => {}), [id]);
+  useEffect(() => {
+    load();
+    const t = setInterval(load, 5000);
+    return () => clearInterval(t);
+  }, [load]);
+  const start = () =>
+    run(async () => {
+      const r = await call('POST', `/agents/${id}/backtests`, { from: new Date(form.from).toISOString(), to: new Date(form.to).toISOString(), initialCapital: Number(form.capital) });
+      load();
+      return r;
+    }, 'Backtest queued');
+  const res = open?.result;
+  return (
+    <>
+      <div className="panel">
+        <p className="muted">Replays the latest strategy version against recorded prices. Every tick is one model call (it uses your daily AI budget). Fills use recorded prices plus the pool fee; price impact is not modelled.</p>
+        <div className="grid">
+          <div><label>From</label><input type="datetime-local" value={form.from} onChange={(e) => setForm({ ...form, from: e.target.value })} /></div>
+          <div><label>To</label><input type="datetime-local" value={form.to} onChange={(e) => setForm({ ...form, to: e.target.value })} /></div>
+          <div><label>Starting capital (quote)</label><input value={form.capital} onChange={(e) => setForm({ ...form, capital: e.target.value })} /></div>
+        </div>
+        <button onClick={start} style={{ marginTop: 12 }}>Run backtest</button>
+        {view}
+      </div>
+      <div className="panel">
+        <table>
+          <thead><tr><th>Created</th><th>Version</th><th>Window</th><th>Status</th><th>Return</th><th>Max drawdown</th><th /></tr></thead>
+          <tbody>
+            {runs.map((b) => (
+              <tr key={b.id}>
+                <td className="muted">{new Date(b.created_at).toLocaleString()}</td>
+                <td>v{b.config_version}</td>
+                <td className="muted">{new Date(b.from_ts).toLocaleString()} → {new Date(b.to_ts).toLocaleString()}</td>
+                <td><span className={`tag ${b.status === 'done' ? 'good' : b.status === 'failed' ? 'bad' : 'warn'}`}>{b.status}{b.status === 'running' ? ` ${b.progress}%` : ''}</span>{b.error && <div className="error">{b.error}</div>}</td>
+                <td>{b.return_pct === null ? '—' : `${fmt(b.return_pct)}%`}</td>
+                <td>{b.max_drawdown_pct === null ? '—' : `${fmt(b.max_drawdown_pct)}%`}</td>
+                <td>{b.status === 'done' && <button className="ghost" onClick={() => call('GET', `/agents/${id}/backtests/${b.id}`).then(setOpen)}>View</button>}</td>
+              </tr>
+            ))}
+            {runs.length === 0 && <tr><td colSpan={7} className="muted">No backtests yet.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      {res && (
+        <div className="panel">
+          <div className="grid">
+            <div><label>Final NAV</label>{fmt(res.finalNav, 4)}</div>
+            <div><label>Return</label>{fmt(res.returnPct)}%</div>
+            <div><label>Max drawdown</label>{fmt(res.maxDrawdownPct)}%</div>
+            <div><label>Decisions</label>{res.decisions.buy} buy · {res.decisions.sell} sell · {res.decisions.hold} hold · {res.decisions.rejected} rejected</div>
+            <div><label>AI tokens used</label>{fmt(res.tokensUsed, 0)}</div>
+          </div>
+          <Equity points={res.equity} />
+          <table style={{ marginTop: 12 }}>
+            <thead><tr><th>Time</th><th>Origin</th><th>Action</th><th>Token</th><th>Qty</th><th>Price</th><th>Quote</th></tr></thead>
+            <tbody>{res.trades.map((t: Any, i: number) => <tr key={i}><td className="muted">{new Date(t.ts).toLocaleString()}</td><td>{t.origin}</td><td>{t.action}</td><td className="mono">{short(t.token)}</td><td>{fmt(t.qty, 6)}</td><td>{fmt(t.price, 4)}</td><td>{fmt(t.quoteAmount, 4)}</td></tr>)}</tbody>
+          </table>
+          <ul className="muted">{res.assumptions.map((a: string) => <li key={a}>{a}</li>)}</ul>
+        </div>
+      )}
+    </>
+  );
+}
+
+function Equity({ points }: { points: { ts: string; nav: number }[] }) {
+  if (points.length < 2) return null;
+  const w = 800;
+  const h = 160;
+  const vals = points.map((p) => p.nav);
+  const lo = Math.min(...vals);
+  const hi = Math.max(...vals);
+  const y = (v: number) => (hi === lo ? h / 2 : h - ((v - lo) / (hi - lo)) * (h - 10) - 5);
+  const d = points.map((p, i) => `${i ? 'L' : 'M'}${((i / (points.length - 1)) * w).toFixed(1)},${y(p.nav).toFixed(1)}`).join(' ');
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '100%', height: 160, marginTop: 12 }} role="img" aria-label="Equity curve">
+      <path d={d} fill="none" stroke="var(--accent)" strokeWidth="2" />
+      <text x="4" y="12" fill="var(--muted)" fontSize="11">{fmt(hi, 2)}</text>
+      <text x="4" y={h - 4} fill="var(--muted)" fontSize="11">{fmt(lo, 2)}</text>
+    </svg>
   );
 }
 

@@ -12,6 +12,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "1.1.0",
     "@odin/analyst": "workspace:*",
+    "@odin/backtest": "workspace:*",
     "@odin/db": "workspace:*",
     "@odin/decision": "workspace:*",
     "@odin/executor": "workspace:*",

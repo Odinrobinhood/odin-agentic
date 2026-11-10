@@ -11,6 +11,7 @@ import { buildServer } from './server.ts';
 import { FundsService } from './funds.ts';
 import { NotificationService } from './notifications.ts';
 import { AlertService } from './alerts.ts';
+import { BacktestService } from './backtests.ts';
 import { PortfolioService, ViemPortfolioChain } from '@odin/portfolio';
 import Anthropic from '@anthropic-ai/sdk';
 import { AnalystEngine, AnalystStore, AnalystTools, ClaudeAnalystLLM } from '@odin/analyst';
@@ -104,6 +105,7 @@ const app = buildServer({
   portfolio,
   analyst,
   alerts: new AlertService(pool),
+  backtests: new BacktestService(pool),
   auth, agents, funds, notifications: new NotificationService(pool), setPaperBalance: (a, q, raw) => runtimeStore.setPaperBalance(a, q, raw) });
 const [host, port] = (process.env.API_LISTEN ?? '127.0.0.1:7500').split(':');
 await app.listen({ host: host!, port: Number(port) });
