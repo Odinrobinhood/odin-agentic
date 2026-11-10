@@ -50,16 +50,35 @@ WITH u AS (INSERT INTO users (wallet_address) VALUES ('0x00000000000000000000000
 INSERT INTO agent_assets (agent_id, token_address) SELECT agent_id, '$WETH' FROM w;
 SQL
 fi
+# the signer signs only for live-mode agents; this wallet is an unfunded staging wallet, so nothing can land
+psql_su -d odin -c "UPDATE agents SET mode = 'live' WHERE name = 'staging-e2e'" >/dev/null
+echo "-- paper-mode agent is refused by the signer:"
+psql_su -d odin -c "UPDATE agents SET mode = 'paper' WHERE name = 'staging-e2e'" >/dev/null
+PAPER_AGENT=$(psql_su -d odin -c "SELECT id FROM agents WHERE name = 'staging-e2e'")
+curl -s -m 30 -H "authorization: Bearer $AT" -H 'content-type: application/json' \
+  -d "{\"agentId\":\"$PAPER_AGENT\",\"swap\":{\"path\":\"0x${USDG#0x}0001f4${WETH#0x}\",\"amountIn\":\"1\"},\"amountOutMin\":\"1\",\"gasParams\":{\"nonce\":0,\"gas\":\"300000\",\"maxFeePerGas\":\"100000000\",\"maxPriorityFeePerGas\":\"0\"}}" \
+  http://127.0.0.1:7401/v1/swap | jq -c .error
+psql_su -d odin -c "UPDATE agents SET mode = 'live' WHERE name = 'staging-e2e'" >/dev/null
 AGENT=$(psql_su -d odin -c "SELECT id FROM agents WHERE name='staging-e2e'")
 echo "agent $AGENT index $IDX wallet $(psql_su -d odin -c "SELECT address FROM agent_wallets WHERE agent_id='$AGENT'")"
 
 path() { echo "0x${1:2}$(printf '%06x' $2)${3:2}"; }
 GAS='"gasParams":{"nonce":0,"gas":"800000","maxFeePerGas":"20000000","maxPriorityFeePerGas":"0"}'
-BUY=$(path $USDG 500 $WETH)
-SELL=$(path $WETH 500 $USDG)
+# the market's own route (deepest pool), and amountOutMin 1% under the QuoterV2 quote (what the risk engine sends)
+SELL=$(psql_su -d odin -c "SELECT path FROM routes WHERE token_address = '$WETH' AND quote_address = '$USDG'")
+FEE=$((16#${SELL:42:6}))
+BUY=$(path $USDG $FEE $WETH)
+minout() { (cd "$APP" && sudo -u odin env $(grep -v '^#' /etc/odin/chain.env | xargs) node packages/risk/scripts/quote.ts "$1" "$2" 100); }
+BUY_MIN=$(minout "$BUY" 1000000)
+SELL_MIN=$(minout "$SELL" 1000000000000)
+echo "USDG/WETH route fee $FEE; minOut buy $BUY_MIN sell $SELL_MIN"
+echo "-- amountOutMin far below the signer's own quote (slippage_too_high):"
+post "$AT" 7401 "{\"agentId\":\"$AGENT\",\"swap\":{\"path\":\"$BUY\",\"amountIn\":\"1000000\"},\"amountOutMin\":\"1\",$GAS}" /v1/swap | jq -c .error
+echo "-- near-empty pool at another fee tier (no_pool, under 25% of the deepest):"
+post "$AT" 7401 "{\"agentId\":\"$AGENT\",\"swap\":{\"path\":\"$(path $USDG 10000 $WETH)\",\"amountIn\":\"1000000\"},\"amountOutMin\":\"1\",$GAS}" /v1/swap | jq -c .error
 
 echo "-- agent buy WETH with USDG (should sign):"
-post "$AT" 7401 "{\"agentId\":\"$AGENT\",\"swap\":{\"path\":\"$BUY\",\"amountIn\":\"1000000\"},\"amountOutMin\":\"1\",$GAS}" /v1/swap | jq -c '{txHash, to, deadline, error}'
+post "$AT" 7401 "{\"agentId\":\"$AGENT\",\"swap\":{\"path\":\"$BUY\",\"amountIn\":\"1000000\"},\"amountOutMin\":\"$BUY_MIN\",$GAS}" /v1/swap | jq -c '{txHash, to, deadline, error}'
 echo "-- approve (should be token=USDG, spender=router):"
 post "$AT" 7401 "{\"agentId\":\"$AGENT\",\"swap\":{\"path\":\"$BUY\",\"amountIn\":\"1000000\"},$GAS}" /v1/approve | jq -c '{txHash, to, error}'
 echo "-- invalid fee tier 501 (bad_fee_tier):"
@@ -71,7 +90,7 @@ post "$AT" 7401 "{\"agentId\":\"$AGENT\",\"swap\":{\"path\":\"$BUY\",\"amountIn\
 echo "-- guard channel buying (guard_must_sell_to_quote):"
 post "$GT" 7402 "{\"agentId\":\"$AGENT\",\"swap\":{\"path\":\"$BUY\",\"amountIn\":\"1\"},\"amountOutMin\":\"1\",$GAS}" /v1/swap | jq -c .error
 echo "-- guard sell WETH to USDG (should sign):"
-post "$GT" 7402 "{\"agentId\":\"$AGENT\",\"swap\":{\"path\":\"$SELL\",\"amountIn\":\"1000\"},\"amountOutMin\":\"1\",$GAS}" /v1/swap | jq -c '{txHash, to, error}'
+post "$GT" 7402 "{\"agentId\":\"$AGENT\",\"swap\":{\"path\":\"$SELL\",\"amountIn\":\"1000000000000\"},\"amountOutMin\":\"$SELL_MIN\",$GAS}" /v1/swap | jq -c '{txHash, to, error}'
 echo "-- agent token on guard port (unauthorized):"
 post "$AT" 7402 '{}' /v1/swap | jq -c .error
 echo "-- real Robinhood Stock Token (NVDA): registry flags it, signer runs paused()/tokenPaused() and signs a buy"
@@ -82,7 +101,7 @@ if [ -n "$NVDA" ]; then
   NBUY=$(psql_su -d odin -c "SELECT path FROM routes WHERE token_address = '$NVDA' AND quote_address = '$USDG'")
   # routes are stored token -> quote (sell); reverse the hops for the buy
   NBUY=$(node -e 'const h=process.argv[1].slice(2);const t=[],f=[];let i=0;for(;;){t.push(h.slice(i,i+40));i+=40;if(i>=h.length)break;f.push(h.slice(i,i+6));i+=6}console.log("0x"+t.reverse().map((x,k)=>x+(f.slice().reverse()[k]??"")).join(""))' "$NBUY")
-  post "$AT" 7401 "{\"agentId\":\"$AGENT\",\"swap\":{\"path\":\"$NBUY\",\"amountIn\":\"1000000\"},\"amountOutMin\":\"1\",$GAS}" /v1/swap | jq -c '{txHash, to, error}'
+  post "$AT" 7401 "{\"agentId\":\"$AGENT\",\"swap\":{\"path\":\"$NBUY\",\"amountIn\":\"1000000\"},\"amountOutMin\":\"$(minout "$NBUY" 1000000)\",$GAS}" /v1/swap | jq -c '{txHash, to, error}'
   psql_su -d odin -c "DELETE FROM agent_assets WHERE agent_id = '$AGENT' AND token_address = '$NVDA'" >/dev/null
 else
   echo "NVDA not in the catalog yet"
