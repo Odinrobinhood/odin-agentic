@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { getAddress } from 'viem';
 import { createPool } from '@odin/db';
 import { Executor, FallbackChain, HttpSignerClient, PgExecutionStore, loadExecutorConfig } from '@odin/executor';
-import { DEFAULT_RISK_CONFIG, PgRiskStore, RiskEngine, ViemBalanceReader, ViemRiskChain } from '@odin/risk';
+import { DEFAULT_RISK_CONFIG, PgRiskStore, RiskEngine, ViemBalanceReader, ViemRiskChain, loadReferees } from '@odin/risk';
 import { PgPaperBalances, PgRuntimeStore } from '@odin/runtime';
 import { PgGuardStore } from './store.ts';
 import { GuardWatcher } from './watcher.ts';
@@ -21,7 +21,7 @@ export function buildGuard(env: NodeJS.ProcessEnv = process.env) {
   const pool = createPool(env.GUARD_DATABASE_URL ?? 'postgresql://odin_guard@/odin?host=/var/run/postgresql', { max: 6 });
   const rpcUrls = req(env, 'CHAIN_RPC_URLS').split(',').map((s) => s.trim()).filter(Boolean);
   const usdg = getAddress(req(env, 'CHAIN_USDG'));
-  const chain = new ViemRiskChain({ rpcUrls, factory: getAddress(req(env, 'CHAIN_FACTORY')), quoter: getAddress(req(env, 'CHAIN_QUOTER_V2')), referees: new Map([[usdg, { fixedUsd: 1 }]]) });
+  const chain = new ViemRiskChain({ rpcUrls, factory: getAddress(req(env, 'CHAIN_FACTORY')), quoter: getAddress(req(env, 'CHAIN_QUOTER_V2')), referees: loadReferees(env.CHAINLINK_FEEDS_FILE, usdg) });
   const risk = new RiskEngine({
     config: { ...DEFAULT_RISK_CONFIG, usdg, weth: getAddress(req(env, 'CHAIN_WETH')), gasReserveWei: BigInt(env.RUNTIME_GAS_RESERVE_WEI ?? '500000000000000') },
     store: new PgRiskStore(pool),

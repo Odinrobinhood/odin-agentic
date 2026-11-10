@@ -3,7 +3,7 @@ import { getAddress } from 'viem';
 import { createPool, type Pool } from '@odin/db';
 import { ClaudeProvider, DecisionEngine, PgTokenMeter, type DecisionProvider } from '@odin/decision';
 import { Executor, FallbackChain, HttpSignerClient, PgExecutionStore, loadExecutorConfig } from '@odin/executor';
-import { DEFAULT_RISK_CONFIG, PgRiskStore, RiskEngine, ViemBalanceReader, ViemRiskChain } from '@odin/risk';
+import { DEFAULT_RISK_CONFIG, PgRiskStore, RiskEngine, ViemBalanceReader, ViemRiskChain, loadReferees } from '@odin/risk';
 import { isOdinChainId } from '@odin/shared';
 import { PgPaperBalances, PgRuntimeStore } from './store.ts';
 import type { TickDeps } from './tick.ts';
@@ -30,8 +30,8 @@ export function buildRuntime(env: NodeJS.ProcessEnv = process.env, opts: { provi
   const risk = new RiskEngine({
     config: { ...DEFAULT_RISK_CONFIG, usdg, weth, gasReserveWei: BigInt(env.RUNTIME_GAS_RESERVE_WEI ?? '500000000000000') },
     store: new PgRiskStore(pool),
-    // USDG is the unit of account; no Chainlink feed is verified yet, so other pairs skip check 5
-    chain: new ViemRiskChain({ rpcUrls, factory: getAddress(req(env, 'CHAIN_FACTORY')), quoter: getAddress(req(env, 'CHAIN_QUOTER_V2')), referees: new Map([[usdg, { fixedUsd: 1 }]]) }),
+    // check 5 referees: USDG fixed at 1, verified Chainlink feeds from CHAINLINK_FEEDS_FILE; tokens without a feed skip it
+    chain: new ViemRiskChain({ rpcUrls, factory: getAddress(req(env, 'CHAIN_FACTORY')), quoter: getAddress(req(env, 'CHAIN_QUOTER_V2')), referees: loadReferees(env.CHAINLINK_FEEDS_FILE, usdg) }),
     balances,
   });
 

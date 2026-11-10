@@ -131,7 +131,7 @@
 
 ### 3.6 Market Data
 - Execution prices are read from Uniswap v3 pools (`slot0` / quoter) per fee tier.
-- Chainlink (where a feed exists) is used as a **referee** to detect a diverging pool, never as the execution price.
+- Chainlink (where a feed exists) is used as a **referee** to detect a diverging pool, never as the execution price. The token → feed map (`deploy/chainlink.mainnet.json`) is generated from Chainlink reference data and verified on-chain; a Stock Token feed is matched only to Robinhood's beacon proxy with that symbol, and its price already includes the token's `uiMultiplier()`. A 24/7 feed is preferred where one exists; a stale feed skips the check rather than blocking.
 - Minute-resolution snapshots are stored in a Timescale hypertable; each decision references the snapshot id it used.
 - **Token catalog**: every pool on Robinhood Chain is discovered from the pinned factory's `PoolCreated` events, and every token in them is listed with sanitized labels, a Stock Token flag, whether it is tradable (has a USDG or WETH pool) and a depth hint. Users search it by symbol, name or address and choose any token themselves; there is no curated list. Tokens whose symbol is also used by a deeper token are flagged, since symbols can be copied.
 - **Token registry**: when a user adds a token address, the system reads `decimals()` and `symbol()` (display only), then searches the factory across all fee tiers against `quote_asset`, USDG and WETH. Tokens without a pool are rejected with code `no_pool`.

@@ -44,6 +44,7 @@ COMMIT=$(gzip -dc "$TARBALL" 2>/dev/null | git get-tar-commit-id 2>/dev/null | h
 echo "BUILD_COMMIT=${COMMIT:-unknown}" > /etc/odin/build.env
 chmod 0644 /etc/odin/build.env
 install -m 0644 "$APP/deploy/chain.mainnet.env" /etc/odin/chain.env
+install -m 0644 "$APP/deploy/chainlink.mainnet.json" /etc/odin/chainlink.json
 
 # --- database ------------------------------------------------------------------------------------
 psql_su() { sudo -u postgres psql -qtAX "$@"; }
