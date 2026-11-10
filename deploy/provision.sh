@@ -39,7 +39,9 @@ mk_token /etc/odin/secrets/signer-agent.token odin        # readable by signer +
 mk_token /etc/odin/secrets/signer-guard.token odin-guard  # readable by signer + guard watcher only
 install -m 0644 "$APP/deploy/signer.mainnet.env" /etc/odin/signer.env
 # build commit for /healthz (git archive stores it in the tarball header)
-echo "BUILD_COMMIT=$(gzip -dc "$TARBALL" | git get-tar-commit-id 2>/dev/null || echo unknown)" > /etc/odin/build.env
+# (gzip may exit on SIGPIPE once git has read the header; only the first line matters)
+COMMIT=$(gzip -dc "$TARBALL" 2>/dev/null | git get-tar-commit-id 2>/dev/null | head -1)
+echo "BUILD_COMMIT=${COMMIT:-unknown}" > /etc/odin/build.env
 chmod 0644 /etc/odin/build.env
 install -m 0644 "$APP/deploy/chain.mainnet.env" /etc/odin/chain.env
 
