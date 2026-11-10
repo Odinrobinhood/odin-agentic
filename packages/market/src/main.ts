@@ -5,12 +5,15 @@ import { ViemMarketChain } from './chain.ts';
 import { PgMarketStore } from './store.ts';
 import { TokenRegistry } from './registry.ts';
 import { takeSnapshot } from './snapshot.ts';
+import { chainlinkOracle, loadFeedMap } from './oracle.ts';
 import { CatalogEnricher, PoolDiscovery, ViemDiscoveryChain } from './catalog.ts';
 
 const cfg = loadMarketConfig();
 const chain = new ViemMarketChain(cfg);
 const pool = createPool(cfg.databaseUrl, { max: 6 });
 const store = new PgMarketStore(pool);
+// Chainlink reference prices for snapshots (verified map, CHAINLINK_FEEDS_FILE); absent file → oracle_price null
+const oracle = process.env.CHAINLINK_FEEDS_FILE ? chainlinkOracle(cfg.rpcUrls, loadFeedMap(process.env.CHAINLINK_FEEDS_FILE)) : undefined;
 const registry = new TokenRegistry(chain, store, cfg);
 const log = (o: object) => console.log(JSON.stringify(o));
 
@@ -56,7 +59,7 @@ for (;;) {
       lastRefresh = started;
       log({ msg: 'routes refreshed', ...r });
     }
-    const s = await takeSnapshot(chain, store, cfg, new Date(started));
+    const s = await takeSnapshot(chain, store, cfg, new Date(started), oracle);
     log({ msg: 'snapshot', rows: s.rows.length, failed: s.failed });
   } catch (e) {
     health.fail((e as Error).message);

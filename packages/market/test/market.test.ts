@@ -156,5 +156,19 @@ describe('snapshot', () => {
     expect(price(MEME)).toBeCloseTo(0.2, 6);
     expect(rows.every((r) => r.ts.getTime() === minuteFloor(now).getTime())).toBe(true);
     expect(rows.find((r) => r.token === USDG)).toBeUndefined();
+    expect(rows.every((r) => r.oraclePrice === null)).toBe(true); // no oracle configured
+  });
+
+  it('records the oracle reference price where one exists, and never fails the snapshot on an oracle error', async () => {
+    await registry.ensureBaseAssets();
+    await registry.addToken(TSLA);
+    await registry.addToken(MEME);
+    const now = new Date('2026-11-09T12:35:00Z');
+    const withRef = await takeSnapshot(chain, store, cfg, now, async () => new Map([[TSLA, 401.5]]));
+    expect(withRef.rows.find((r) => r.token === TSLA)!.oraclePrice).toBe(401.5);
+    expect(withRef.rows.find((r) => r.token === MEME)!.oraclePrice).toBeNull();
+    const broken = await takeSnapshot(chain, store, cfg, now, async () => Promise.reject(new Error('rpc down')));
+    expect(broken.failed).toEqual([]);
+    expect(broken.rows.every((r) => r.oraclePrice === null)).toBe(true);
   });
 });

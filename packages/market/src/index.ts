@@ -6,3 +6,4 @@ export * from './registry.ts';
 export * from './snapshot.ts';
 export * from './config.ts';
 export * from './catalog.ts';
+export * from './oracle.ts';

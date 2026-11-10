@@ -1,5 +1,6 @@
 import type { Address } from 'viem';
 import type { MarketChain, PoolState } from './chain.ts';
+import type { OraclePrices } from './oracle.ts';
 import { pathMid } from './price.ts';
 import type { MarketStore, SnapshotRow, StoredRoute } from './store.ts';
 
@@ -10,13 +11,14 @@ export function minuteFloor(d: Date): Date {
 /**
  * Minute snapshot (architecture §3.6): USDG mid price of every token with a route, read from the pools
  * of its stored route. Tokens routed only to WETH are priced through WETH's own USDG price.
- * Chainlink referee is not wired yet (feeds unverified), so oracle_price is null.
+ * oracle_price: the Chainlink reference price in USDG where a verified, fresh feed exists (else null).
  */
 export async function takeSnapshot(
   chain: MarketChain,
   store: MarketStore,
   cfg: { usdg: Address; weth: Address },
   now: Date = new Date(),
+  oracle?: OraclePrices,
 ): Promise<{ rows: SnapshotRow[]; failed: Address[] }> {
   const ts = minuteFloor(now);
   const tokens = new Map((await store.listTokens()).map((t) => [t.address, t]));
@@ -70,6 +72,11 @@ export async function takeSnapshot(
     } catch {
       failed.push(token);
     }
+  }
+  if (oracle && rows.length) {
+    // reference prices are informational: a failed oracle read never blocks the market snapshot
+    const ref = await oracle(rows.map((r) => r.token)).catch(() => new Map<Address, number>());
+    for (const r of rows) r.oraclePrice = ref.get(r.token) ?? null;
   }
   await store.insertSnapshots(rows);
   return { rows, failed };
