@@ -1,6 +1,9 @@
 'use client';
 import { use, useCallback, useEffect, useState } from 'react';
-import { ApiFailure, call, connectedAddress, explorerAddress, explorerTx, fmt, short, signText, units, withStepUp } from '@/lib/client';
+import { ApiFailure, call, connectedAddress, explorerAddress, explorerTx, fmt, short, signText, units, unusualText, withStepUp } from '@/lib/client';
+
+const AGENT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const odd = <span className="tag warn" title="Contains characters outside plain ASCII, a common trick to imitate a real ticker. Check the address.">unusual characters</span>;
 
 type Any = Record<string, any>;
 const TABS = ['Overview', 'Strategy', 'Assets', 'Risk & TP/SL', 'Backtest', 'Activity', 'Funds'] as const;
@@ -26,7 +29,8 @@ export default function AgentPage({ params }: { params: Promise<{ id: string }> 
   const [tab, setTab] = useState<(typeof TABS)[number]>('Overview');
   const [agent, setAgent] = useState<Any | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const reload = useCallback(() => call('GET', `/agents/${id}`).then(setAgent).catch((e) => (e.code === 'unauthorized' ? (location.href = '/') : setErr(e.message))), [id]);
+  // a crafted id (e.g. with encoded slashes) must never be spliced into API paths
+  const reload = useCallback(() => !AGENT_ID.test(id) ? setErr('Unknown agent') : call('GET', `/agents/${id}`).then(setAgent).catch((e) => (e.code === 'unauthorized' ? (location.href = '/') : setErr(e.message))), [id]);
   useEffect(() => {
     reload();
   }, [reload]);
@@ -283,6 +287,7 @@ function Assets({ id, agent, reload }: { id: string; agent: Any; reload: () => v
                 <td>
                   {t.symbol || <span className="muted">?</span>} {t.is_stock_token && <span className="tag">stock</span>}
                   {t.symbol_shadowed && <span className="tag warn" title="Another, deeper token uses the same symbol. Check the address.">same symbol as a bigger token</span>}
+                  {(unusualText(t.symbol) || unusualText(t.name)) && odd}
                 </td>
                 <td>{t.name}</td>
                 <td className="mono"><a href={explorerAddress(t.address)} target="_blank" rel="noreferrer">{short(t.address)}</a></td>
@@ -304,7 +309,7 @@ function Assets({ id, agent, reload }: { id: string; agent: Any; reload: () => v
           <tbody>
             {agent.assets.map((a: Any) => (
               <tr key={a.address}>
-                <td>{a.symbol}</td><td>{a.name}</td><td className="mono"><a href={explorerAddress(a.address)} target="_blank" rel="noreferrer">{a.address}</a></td>
+                <td>{a.symbol} {(unusualText(a.symbol) || unusualText(a.name)) && odd}</td><td>{a.name}</td><td className="mono"><a href={explorerAddress(a.address)} target="_blank" rel="noreferrer">{a.address}</a></td>
                 <td>{a.is_stock_token ? 'yes' : 'no'}</td>
                 <td><button className="ghost" onClick={() => put(current.filter((x) => x !== a.address))}>Remove</button></td>
               </tr>
@@ -512,6 +517,8 @@ function Funds({ id, agent }: { id: string; agent: Any }) {
   }, [load]);
   const withdraw = () =>
     run(async () => {
+      const what = w.token === 'native' || !w.token ? 'native ETH' : `token ${w.token}`;
+      if (!confirm(`Withdraw ${w.amount} of ${what} from the agent wallet to your signed-in wallet?`)) return;
       const r = await withStepUp(() => call('POST', `/agents/${id}/withdraw`, w));
       load();
       if (r.error) throw new Error(`${r.status}: ${r.error.code} — ${r.error.message}`);

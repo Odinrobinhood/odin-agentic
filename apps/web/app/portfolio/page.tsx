@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { call, explorerAddress, fmt, short, units } from '@/lib/client';
+import { call, explorerAddress, fmt, short, units, unusualText } from '@/lib/client';
 
 type Any = Record<string, any>;
 
@@ -61,7 +61,10 @@ export default function Portfolio() {
                 <tbody>
                   {w.holdings.map((h: Any) => (
                     <tr key={h.token}>
-                      <td>{h.symbol}</td>
+                      <td>
+                        {h.symbol} {unusualText(h.symbol) && <span className="tag warn">unusual characters</span>}
+                        <div className="mono muted"><a href={explorerAddress(h.token)} target="_blank" rel="noreferrer">{short(h.token)}</a></div>
+                      </td>
                       <td>{units(h.qty, h.decimals)}</td>
                       <td>{h.priced ? fmt(h.valueUsdg) : <span className="tag warn">unpriced</span>}</td>
                       <td>{h.costBasisUsdg === null ? <span className="muted" title="Indexed history does not explain the whole balance">unknown</span> : fmt(h.costBasisUsdg)}</td>

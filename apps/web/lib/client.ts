@@ -62,18 +62,26 @@ export async function signIn(): Promise<Address> {
   return getAddress(j.address);
 }
 
-/** Run a sensitive call; if the API asks for step-up, re-sign in once and retry. */
+/** Run a sensitive call; if the API asks for step-up, re-sign in once (with the SAME account) and retry. */
 export async function withStepUp<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
   } catch (e) {
     if (e instanceof ApiFailure && e.code === 'unauthorized' && /step-up/.test(e.message)) {
+      const me = await call('GET', '/me').catch(() => null);
+      const selected = await connectedAddress();
+      if (me?.address && getAddress(me.address) !== selected) {
+        throw new Error(`Your wallet has another account selected (${short(selected)}). Switch back to ${short(me.address)} to confirm.`);
+      }
       await signIn();
       return fn();
     }
     throw e;
   }
 }
+
+/** Symbols/names with characters outside printable ASCII can imitate real tickers (e.g. Cyrillic 'Т' in 'ТSLA'). */
+export const unusualText = (s?: string | null) => !!s && /[^\x20-\x7E]/.test(s);
 
 export const explorerTx = (hash: string) => `https://robinhoodchain.blockscout.com/tx/${hash}`;
 export const explorerAddress = (a: string) => `https://robinhoodchain.blockscout.com/address/${a}`;
