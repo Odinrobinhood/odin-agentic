@@ -133,6 +133,7 @@
 - Execution prices are read from Uniswap v3 pools (`slot0` / quoter) per fee tier.
 - Chainlink (where a feed exists) is used as a **referee** to detect a diverging pool, never as the execution price.
 - Minute-resolution snapshots are stored in a Timescale hypertable; each decision references the snapshot id it used.
+- **Token catalog**: every pool on Robinhood Chain is discovered from the pinned factory's `PoolCreated` events, and every token in them is listed with sanitized labels, a Stock Token flag, whether it is tradable (has a USDG or WETH pool) and a depth hint. Users search it by symbol, name or address and choose any token themselves; there is no curated list. Tokens whose symbol is also used by a deeper token are flagged, since symbols can be copied.
 - **Token registry**: when a user adds a token address, the system reads `decimals()` and `symbol()` (display only), then searches the factory across all fee tiers against `quote_asset`, USDG and WETH. Tokens without a pool are rejected with code `no_pool`.
 - **Routing**: single-hop when a direct pool exists, otherwise multi-hop via USDG/WETH (`exactInput` with a path). Pools are chosen by deepest liquidity.
 - Price snapshots are taken for every token in the registry that has a route (needed by agents, analyst, signals and portfolio valuation).

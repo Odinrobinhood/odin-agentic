@@ -263,12 +263,39 @@ function Assets({ id, agent, reload }: { id: string; agent: Any; reload: () => v
   const { run, view } = useMsg();
   const current: string[] = agent.assets.map((a: Any) => a.address);
   const put = (tokens: string[]) => run(async () => (await call('PUT', `/agents/${id}/assets`, { tokens }), reload(), setAddr('')));
+  const [q, setQ] = useState('');
+  const [hits, setHits] = useState<Any[]>([]);
+  useEffect(() => {
+    const t = setTimeout(() => call('GET', `/tokens?q=${encodeURIComponent(q)}&limit=25`).then(setHits).catch(() => setHits([])), 250);
+    return () => clearTimeout(t);
+  }, [q]);
+  const lc = current.map((a) => a.toLowerCase());
   return (
     <>
       <div className="panel">
-        <label>Add a token by contract address (Stock Tokens or any ERC-20 with a pool on Robinhood Chain)</label>
+        <label>Find any token on Robinhood Chain — by symbol, name or contract address. You decide what the agent may trade.</label>
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="e.g. TSLA, meme, 0x…" />
+        <table style={{ marginTop: 8 }}>
+          <thead><tr><th>Symbol</th><th>Name</th><th>Address</th><th>Depth (USDG)</th><th /></tr></thead>
+          <tbody>
+            {hits.map((t) => (
+              <tr key={t.address}>
+                <td>
+                  {t.symbol || <span className="muted">?</span>} {t.is_stock_token && <span className="tag">stock</span>}
+                  {t.symbol_shadowed && <span className="tag warn" title="Another, deeper token uses the same symbol. Check the address.">same symbol as a bigger token</span>}
+                </td>
+                <td>{t.name}</td>
+                <td className="mono"><a href={explorerAddress(t.address)} target="_blank" rel="noreferrer">{short(t.address)}</a></td>
+                <td>{t.tradable ? fmt(t.depth_usdg, 0) : <span className="tag bad" title="No pool against USDG or WETH, so the agent cannot route a trade">no USDG/WETH pool</span>}</td>
+                <td>{lc.includes(t.address.toLowerCase()) ? <span className="muted">added</span> : <button className="ghost" disabled={!t.tradable} onClick={() => put([...current, t.address])}>Add</button>}</td>
+              </tr>
+            ))}
+            {hits.length === 0 && <tr><td colSpan={5} className="muted">{q ? 'No match. You can still paste any contract address below.' : 'The catalog is filled from every pool created on Robinhood Chain.'}</td></tr>}
+          </tbody>
+        </table>
+        <label style={{ marginTop: 12 }}>Or paste a contract address</label>
         <div className="row"><input value={addr} onChange={(e) => setAddr(e.target.value)} placeholder="0x…" style={{ flex: 1 }} /><button onClick={() => put([...current, addr])} disabled={!/^0x[0-9a-fA-F]{40}$/.test(addr)}>Add</button></div>
-        <p className="muted">Tokens are identified by address only — symbols can be faked.</p>
+        <p className="muted">Tokens are identified by address only — symbols and names can be copied by anyone.</p>
         {view}
       </div>
       <div className="panel">

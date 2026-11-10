@@ -5,16 +5,37 @@ import { ViemMarketChain } from './chain.ts';
 import { PgMarketStore } from './store.ts';
 import { TokenRegistry } from './registry.ts';
 import { takeSnapshot } from './snapshot.ts';
+import { CatalogEnricher, PoolDiscovery, ViemDiscoveryChain } from './catalog.ts';
 
 const cfg = loadMarketConfig();
 const chain = new ViemMarketChain(cfg);
-const store = new PgMarketStore(createPool(cfg.databaseUrl, { max: 4 }));
+const pool = createPool(cfg.databaseUrl, { max: 6 });
+const store = new PgMarketStore(pool);
 const registry = new TokenRegistry(chain, store, cfg);
 const log = (o: object) => console.log(JSON.stringify(o));
 
 await registry.ensureBaseAssets();
 log({ msg: 'market up', chainId: cfg.chainId });
 const health = new Health('market', 180000).listen(HEALTH_PORTS.market);
+
+// token catalog (every pool on the chain, so users can pick any token): runs beside the minute snapshots
+const discoveryChain = new ViemDiscoveryChain(cfg.rpcUrls);
+const discovery = new PoolDiscovery({ pool, chain: discoveryChain, factory: cfg.factory });
+const enricher = new CatalogEnricher({ pool, chain: discoveryChain, market: chain, usdg: cfg.usdg, weth: cfg.weth });
+void (async () => {
+  for (;;) {
+    try {
+      const d = await discovery.step();
+      if (d.found) log({ msg: 'pools discovered', found: d.found, toBlock: d.toBlock.toString() });
+      const n = await enricher.step();
+      if (n) log({ msg: 'catalog enriched', tokens: n });
+      if (d.caughtUp && n === 0) await new Promise((r) => setTimeout(r, 30_000));
+    } catch (e) {
+      log({ msg: 'catalog step failed', error: (e as Error).message.split('\n')[0] });
+      await new Promise((r) => setTimeout(r, 15_000));
+    }
+  }
+})();
 
 let lastRefresh = 0;
 for (;;) {

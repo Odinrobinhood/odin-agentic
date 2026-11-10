@@ -126,6 +126,10 @@ systemctl start odin-restore-test.service; journalctl -u odin-restore-test --no-
 echo "== /healthz of every service (build commit)"
 for p in 7401 7500 7601 7603 7604 7605 7606 7607; do curl -s -m 3 http://127.0.0.1:$p/healthz | jq -c '{service: (.service // .channel // "api"), ok, commit: (.commit[0:7])}'; done
 
+echo "== token catalog (every pool from the factory)"
+psql_su -d odin -c "SELECT (SELECT count(*) FROM discovered_pools) AS pools, (SELECT count(*) FROM token_catalog) AS tokens, (SELECT count(*) FROM token_catalog WHERE tradable) AS tradable"
+psql_su -d odin -c "SELECT symbol, is_stock_token, round(depth_usdg) FROM token_catalog WHERE tradable AND error IS NULL ORDER BY depth_usdg DESC NULLS LAST LIMIT 8"
+
 echo "== executor: signer -> real mainnet RPC broadcast from the unfunded staging wallet (must be refused: insufficient_gas)"
 (cd "$APP" && sudo -u odin env $(grep -v '^#' /etc/odin/chain.env | xargs) STAGING_AGENT_ID="$AGENT" \
   node packages/executor/scripts/staging-check.ts)

@@ -91,7 +91,19 @@ export class AnalystTools {
     const all = isAddress(q, { strict: false })
       ? await this.d.pool.query('SELECT address, symbol, name, decimals, is_stock_token FROM tokens WHERE address = $1', [q.toLowerCase()])
       : await this.d.pool.query('SELECT address, symbol, name, decimals, is_stock_token FROM tokens WHERE upper(symbol) = upper($1) LIMIT 5', [q]);
-    if (!all.rows.length) return { source: 'get_token', found: false, note: 'Not in the token registry. A user can add it by address when picking agent assets.' };
+    if (!all.rows.length) {
+      // not used by any agent yet: fall back to the chain-wide catalog (every token with a pool)
+      const cat = isAddress(q, { strict: false })
+        ? await this.d.pool.query('SELECT address, symbol, name, decimals, is_stock_token, tradable, depth_usdg::float AS depth_usdg, pools FROM token_catalog WHERE address = $1 AND error IS NULL', [q.toLowerCase()])
+        : await this.d.pool.query('SELECT address, symbol, name, decimals, is_stock_token, tradable, depth_usdg::float AS depth_usdg, pools FROM token_catalog WHERE upper(symbol) = upper($1) AND error IS NULL ORDER BY depth_usdg DESC NULLS LAST LIMIT 5', [q]);
+      if (!cat.rows.length) return { source: 'get_token', found: false, note: 'No pool for this token on Robinhood Chain was found.' };
+      return {
+        source: 'get_token', found: true, registered: false, ambiguous_symbol: cat.rows.length > 1,
+        tokens: cat.rows.map((t) => ({ address: getAddress(t.address), symbol: sanitizeSymbol(t.symbol), name: sanitizeName(t.name), decimals: t.decimals, stock_token: t.is_stock_token, tradable_via_usdg_or_weth: t.tradable, base_pool_depth_usdg: t.depth_usdg, pools: t.pools })),
+        note: 'From the chain-wide pool catalog; price history and flows exist only once a user adds the token to an agent.',
+        as_of: new Date().toISOString(),
+      };
+    }
     const tokens = [];
     for (const t of all.rows) {
       const routes = await this.d.pool.query('SELECT quote_address, path, pools::text[] AS pools FROM routes WHERE token_address = $1', [t.address]);

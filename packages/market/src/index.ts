@@ -5,3 +5,4 @@ export * from './store.ts';
 export * from './registry.ts';
 export * from './snapshot.ts';
 export * from './config.ts';
+export * from './catalog.ts';

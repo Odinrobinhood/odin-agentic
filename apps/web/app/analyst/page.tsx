@@ -50,7 +50,7 @@ export default function Analyst() {
       </div>
       <div style={{ flex: 1 }}>
         <h1>Market analyst</h1>
-        <p className="muted">Ask about any token or Stock Token on Robinhood Chain. Answers come only from on-chain data and cite their source; this is not financial advice.</p>
+        <p className="muted">Ask about any token on Robinhood Chain (Stock Tokens included). Answers come only from on-chain data and cite their source; this is not financial advice.</p>
         <div className="panel chat">
           {msgs.map((m, i) => (
             <div key={i} className={`bubble ${m.role}`}>

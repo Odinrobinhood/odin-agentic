@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest }
 import { z, type ZodTypeAny } from 'zod';
 import { getAddress, type Address, type Hex } from 'viem';
 import { Rejection, type RejectionCode } from '@odin/shared';
+import { searchCatalog } from '@odin/market';
 import type { AuthService } from './auth.ts';
 import type { AnalystEngine, AnalystStore } from '@odin/analyst';
 import { BacktestInput, type BacktestService } from './backtests.ts';
@@ -200,6 +201,12 @@ export function buildServer(d: ApiDeps): FastifyInstance {
     }
     await d.analyst.store.append(id, content, a);
     return json(a);
+  });
+
+  // ── token catalog: every token with a pool on Robinhood Chain, searchable; the user decides what to trade ──
+  app.get('/v1/tokens', { preHandler: authed }, async (req) => {
+    const q = req.query as { q?: string; limit?: string };
+    return json(await searchCatalog(d.pool as never, String(q.q ?? '').slice(0, 64), Number(q.limit ?? 25)));
   });
 
   // ── portfolio (architecture §3.15): SIWE + agent wallets automatically, plus watch-only addresses ────
