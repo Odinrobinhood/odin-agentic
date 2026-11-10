@@ -23,6 +23,7 @@ export const REJECTION_CODES = [
   // amounts
   'amount_invalid',
   'min_out_zero',
+  'slippage_too_high',
   'approval_too_large',
   // gas
   'gas_limit_exceeded',
@@ -32,6 +33,7 @@ export const REJECTION_CODES = [
   // chain
   'chain_mismatch',
   'chain_read_failed',
+  'nonce_reserved_by_guard',
   // risk engine
   'insufficient_balance',
   'insufficient_gas',

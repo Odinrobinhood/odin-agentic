@@ -32,7 +32,10 @@ const erc20Abi = parseAbi(['function approve(address spender, uint256 amount) re
 
 class FakeChain implements ChainReader {
   pools = new Set<string>();
+  liquidity = new Map<string, bigint>();
   paused = new Set<Address>();
+  stock = new Set<Address>([TSLA]);
+  quoteOut = 1n;
   failReads = false;
   key(x: Address, y: Address, fee: number) {
     return [x, y].sort().join('-') + `-${fee}`;
@@ -46,9 +49,19 @@ class FakeChain implements ChainReader {
   async routerFactory() {
     return FACTORY;
   }
-  async liquidPool(_f: Address, x: Address, y: Address, fee: number) {
+  async poolLiquidity(_f: Address, x: Address, y: Address, fee: number) {
     if (this.failReads) throw new Error('rpc down');
-    return this.pools.has(this.key(x, y, fee)) ? addr(0x9999) : null;
+    const k = this.key(x, y, fee);
+    return this.pools.has(k) ? (this.liquidity.get(k) ?? 1000n) : null;
+  }
+  async quote() {
+    return this.quoteOut;
+  }
+  async quoterFactory() {
+    return FACTORY;
+  }
+  async isStockToken(t: Address) {
+    return this.stock.has(t);
   }
   async isPaused(t: Address) {
     return this.paused.has(t);
@@ -77,6 +90,7 @@ function makePolicy(over: Partial<AgentPolicy> = {}): AgentPolicy {
   return {
     agentId: AGENT_ID,
     status: 'active',
+    mode: 'live',
     derivationIndex: 5n,
     wallet: WALLET,
     quoteAsset: USDG,
@@ -99,6 +113,8 @@ function build(over: Partial<SignerDeps['config']> = {}) {
       chainId: 46630,
       router: ROUTER,
       factory: FACTORY,
+      quoter: addr(0x7777),
+      maxSlippageBps: 5000,
       usdg: USDG,
       weth: WETH,
       agentDailyCap: 10,
@@ -278,6 +294,7 @@ describe('agent status and channels', () => {
     await rejects(signer.swap(swapReq(encodePath([USDG, OTHER], [500])), 'agent'), 'token_not_allowed');
     await rejects(signer.swap(swapReq(encodePath([OTHER, WETH], [500])), 'agent'), 'token_not_allowed');
     // held stock tokens keep their pause checks
+    chain.stock.add(OTHER); // Robinhood beacon proxy on chain
     chain.paused.add(OTHER);
     await rejects(signer.swap(swapReq(exit, { gasParams: { ...gas, nonce: 10 } }), 'guard'), 'token_paused');
   });
@@ -369,5 +386,43 @@ describe('key export', () => {
     await rejects(signer.exportKey({ agentId: AGENT_ID, message: edited, signature: await OWNER.signMessage({ message: edited }) }, 'agent'), 'bad_request');
     const m2 = msg({ nonce: 'guardchan0000000001' });
     await rejects(signer.exportKey({ agentId: AGENT_ID, message: m2, signature: await OWNER.signMessage({ message: m2 }) }, 'guard'), 'unauthorized');
+  });
+});
+
+describe('security review hardening (2026-11-10)', () => {
+  it('refuses an amountOutMin more than maxSlippageBps below its own quote', async () => {
+    chain.quoteOut = 1000n;
+    await rejects(signer.swap(swapReq(buyTsla, { amountOutMin: '499' }), 'agent'), 'slippage_too_high');
+    await expect(signer.swap(swapReq(buyTsla, { amountOutMin: '500' }), 'agent')).resolves.toBeTruthy();
+  });
+
+  it('refuses a hop through a near-empty pool when a deeper fee tier exists', async () => {
+    chain.addPool(USDG, TSLA, 10000);
+    chain.liquidity.set(chain.key(USDG, TSLA, 10000), 1_000_000n); // the real market
+    chain.liquidity.set(chain.key(USDG, TSLA, 500), 1n); // attacker-seeded pool
+    await rejects(signer.swap(swapReq(buyTsla), 'agent'), 'no_pool');
+    await expect(signer.swap(swapReq(encodePath([USDG, TSLA], [10000])), 'agent')).resolves.toBeTruthy();
+  });
+
+  it('decides Stock Token status from the chain, not from app tables', async () => {
+    policies.policy = makePolicy({ stockTokens: new Set() }); // app says "not a stock token"
+    chain.paused.add(TSLA);
+    await rejects(signer.swap(swapReq(buyTsla), 'agent'), 'token_paused');
+  });
+
+  it('never signs for a paper-mode agent', async () => {
+    policies.policy = makePolicy({ mode: 'paper' });
+    await rejects(signer.swap(swapReq(buyTsla), 'agent'), 'agent_not_active');
+    await rejects(signer.swap(swapReq(sellTsla), 'guard'), 'agent_not_active');
+  });
+
+  it('the agent channel cannot replace a pending guard exit by reusing its nonce', async () => {
+    await signer.swap(swapReq(sellTsla, { gasParams: { ...gas, nonce: 9 } }), 'guard');
+    await rejects(signer.swap(swapReq(buyTsla, { gasParams: { ...gas, nonce: 9, maxFeePerGas: '200000000' } }), 'agent'), 'nonce_reserved_by_guard');
+    await expect(signer.swap(swapReq(buyTsla, { gasParams: { ...gas, nonce: 10 } }), 'agent')).resolves.toBeTruthy();
+  });
+
+  it('refuses a zero max fee', async () => {
+    await rejects(signer.swap(swapReq(buyTsla, { gasParams: { ...gas, maxFeePerGas: '0' } }), 'agent'), 'fee_cap_exceeded');
   });
 });

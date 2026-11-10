@@ -8,6 +8,10 @@ export type SignerConfig = {
   /** SwapRouter02, pinned here — never taken from a request, the API or the DB. */
   router: Address;
   factory: Address;
+  /** QuoterV2: the signer prices every swap itself (slippage floor). */
+  quoter: Address;
+  /** Technical limit: amountOutMin may be at most this far below the signer's own quote. */
+  maxSlippageBps: number;
   /** The only tokens allowed as intermediate hops. */
   usdg: Address;
   weth: Address;
@@ -65,6 +69,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): SignerConfig {
     rpcUrls,
     router: getAddress(req(env, 'SIGNER_ROUTER')),
     factory: getAddress(req(env, 'SIGNER_FACTORY')),
+    quoter: getAddress(req(env, 'SIGNER_QUOTER_V2')),
+    maxSlippageBps: (() => {
+      const v = int(env, 'SIGNER_MAX_SLIPPAGE_BPS', 5000);
+      if (v < 1 || v >= 10_000) throw new Error('SIGNER_MAX_SLIPPAGE_BPS must be in [1, 9999]');
+      return v;
+    })(),
     usdg: getAddress(req(env, 'SIGNER_USDG')),
     weth: getAddress(req(env, 'SIGNER_WETH')),
     seedFile: req(env, 'SIGNER_SEED_FILE'),

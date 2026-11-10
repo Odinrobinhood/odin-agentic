@@ -5,6 +5,7 @@ import { Rejection } from '@odin/shared';
 export type AgentPolicy = {
   agentId: string;
   status: 'draft' | 'active' | 'paused' | 'retired';
+  mode: 'paper' | 'live';
   derivationIndex: bigint;
   wallet: Address;
   quoteAsset: Address;
@@ -99,12 +100,13 @@ export class PgPolicyStore implements PolicyStore {
   async load(agentId: string): Promise<AgentPolicy | null> {
     const head = await this.pool.query<{
       status: AgentPolicy['status'];
+      mode: AgentPolicy['mode'];
       derivation_index: string;
       address: string;
       custody: string;
       quote_asset: string | null;
     }>(
-      `SELECT a.status, w.derivation_index, w.address, w.custody,
+      `SELECT a.status, a.mode, w.derivation_index, w.address, w.custody,
               (SELECT c.quote_asset FROM agent_configs c WHERE c.agent_id = a.id ORDER BY c.version DESC LIMIT 1) AS quote_asset
          FROM agents a JOIN agent_wallets w ON w.agent_id = a.id
         WHERE a.id = $1`,
@@ -152,6 +154,7 @@ export class PgPolicyStore implements PolicyStore {
     return {
       agentId,
       status: row.status,
+      mode: row.mode,
       derivationIndex: vault.derivationIndex,
       wallet: vault.wallet,
       quoteAsset,

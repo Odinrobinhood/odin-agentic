@@ -1,6 +1,6 @@
 import { createPublicClient, fallback, getAddress, http, parseAbi, type Address, type Hex } from 'viem';
 import type { Pool } from '@odin/db';
-import { sanitizeName, sanitizeSymbol } from '@odin/shared';
+import { EIP1967_BEACON_SLOT, ROBINHOOD_STOCK_BEACON, sanitizeName, sanitizeSymbol } from '@odin/shared';
 
 /** PoolCreated(address indexed token0, address indexed token1, uint24 indexed fee, int24 tickSpacing, address pool) */
 export const POOL_CREATED_TOPIC: Hex = '0x783cca1c0412dd0d695e784568c96da2e9c22ff989357a2e8b1d9b2b4e6b7118';
@@ -70,7 +70,7 @@ export class ViemDiscoveryChain implements DiscoveryChain {
     ]);
     // mixed return types across the five calls: read results untyped and narrow per field below
     const r = (await this.c.multicall({ multicallAddress: MULTICALL3, allowFailure: true, batchSize: 16_384, contracts: calls } as never)) as { status: 'success' | 'failure'; result?: unknown }[];
-    return tokens.map((_, i) => {
+    const out = tokens.map((_, i) => {
       const [dec, sym, nam, paused, tokenPaused] = r.slice(i * 5, i * 5 + 5);
       return {
         decimals: dec?.status === 'success' ? Number(dec.result) : null,
@@ -79,6 +79,13 @@ export class ViemDiscoveryChain implements DiscoveryChain {
         stock: paused?.status === 'success' && tokenPaused?.status === 'success',
       };
     });
+    // exposing the controls is not proof (anyone can deploy them): only Robinhood beacon proxies are Stock Tokens
+    for (let i = 0; i < tokens.length; i++) {
+      if (!out[i]!.stock) continue;
+      const slot = await this.c.getStorageAt({ address: tokens[i]!, slot: EIP1967_BEACON_SLOT }).catch(() => undefined);
+      out[i]!.stock = !!slot && `0x${slot.slice(26)}`.toLowerCase() === ROBINHOOD_STOCK_BEACON;
+    }
+    return out;
   }
 }
 

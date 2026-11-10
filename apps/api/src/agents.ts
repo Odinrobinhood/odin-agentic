@@ -39,7 +39,8 @@ export const RiskInput = z
     maxExposurePct: pct.default(null),
     maxDailyLossPct: pct.default(null),
     maxTradesPerDay: z.number().int().positive().max(100_000).nullable().default(null),
-    maxSlippageBps: z.number().int().min(0).max(10_000).nullable().default(null),
+    // technical limit shared with the signer (SIGNER_MAX_SLIPPAGE_BPS)
+    maxSlippageBps: z.number().int().min(0).max(5_000).nullable().default(null),
   })
   .strict();
 

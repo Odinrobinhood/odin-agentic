@@ -41,13 +41,21 @@ export class PgLedger implements Ledger {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
-      // serialise all signatures of one agent+channel so the count cannot race
-      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`${e.agentId}:${e.channel}`]);
+      // serialise all signatures of one agent (both channels) so counts and nonce reservations cannot race
+      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`signer:${e.agentId}`]);
       // re-signing byte-identical tx data yields the same hash: idempotent, not a new signature
       const seen = await client.query('SELECT 1 FROM signer.signatures WHERE tx_hash = $1 AND agent_id = $2', [e.txHash, e.agentId]);
       if (seen.rowCount) {
         await client.query('COMMIT');
         return;
+      }
+      if (e.channel === 'agent') {
+        // a guard exit signed in the last 10 minutes owns its nonce: the agent channel cannot replace it
+        const g = await client.query(
+          `SELECT 1 FROM signer.signatures WHERE agent_id = $1 AND channel = 'guard' AND nonce = $2 AND created_at > $3::timestamptz - interval '10 minutes'`,
+          [e.agentId, e.nonce, now.toISOString()],
+        );
+        if (g.rowCount) throw new Rejection('nonce_reserved_by_guard', `nonce ${e.nonce} belongs to a pending guard exit`);
       }
       const day = utcDay(now);
       const used = await client.query<{ n: string }>(
@@ -72,7 +80,7 @@ export class PgLedger implements Ledger {
 }
 
 export class MemoryLedger implements Ledger {
-  readonly rows: (LedgerEntry & { day: string })[] = [];
+  readonly rows: (LedgerEntry & { day: string; at: number })[] = [];
   readonly exportNonces = new Set<string>();
   async burnExportNonce(nonce: string): Promise<boolean> {
     if (this.exportNonces.has(nonce)) return false;
@@ -81,9 +89,12 @@ export class MemoryLedger implements Ledger {
   }
   async record(e: LedgerEntry, now: Date): Promise<void> {
     if (this.rows.some((r) => r.txHash === e.txHash && r.agentId === e.agentId)) return;
+    if (e.channel === 'agent' && this.rows.some((r) => r.agentId === e.agentId && r.channel === 'guard' && r.nonce === e.nonce && now.getTime() - r.at < 600_000)) {
+      throw new Rejection('nonce_reserved_by_guard', `nonce ${e.nonce} belongs to a pending guard exit`);
+    }
     const day = utcDay(now);
     const used = this.rows.filter((r) => r.agentId === e.agentId && r.channel === e.channel && r.day === day).length;
     if (used >= e.cap) throw new Rejection('signature_cap_reached', `${e.channel} signature cap of ${e.cap}/day reached`);
-    this.rows.push({ ...e, day });
+    this.rows.push({ ...e, day, at: now.getTime() });
   }
 }

@@ -1,5 +1,5 @@
 import { createPublicClient, fallback, getAddress, http, parseAbi, zeroAddress, type Address, type Hex } from 'viem';
-import type { FeeTier } from '@odin/shared';
+import { EIP1967_BEACON_SLOT, ROBINHOOD_STOCK_BEACON, type FeeTier } from '@odin/shared';
 
 export type PoolState = { pool: Address; token0: Address; token1: Address; fee: FeeTier; liquidity: bigint; sqrtPriceX96: bigint };
 export type TokenMeta = { decimals: number; symbol: unknown; name: unknown };
@@ -7,7 +7,7 @@ export type TokenMeta = { decimals: number; symbol: unknown; name: unknown };
 /** Chain reads Market Data needs. Everything is a read; nothing here can sign. */
 export interface MarketChain {
   tokenMeta(token: Address): Promise<TokenMeta>;
-  /** True when the token exposes the Robinhood Stock Token controls (paused() and tokenPaused()). */
+  /** True only for Robinhood Stock Tokens: beacon proxy of the Robinhood beacon exposing paused()/tokenPaused(). */
   hasStockControls(token: Address): Promise<boolean>;
   /** Pool from the pinned factory with its live state, or null if none exists. */
   pool(a: Address, b: Address, fee: FeeTier): Promise<PoolState | null>;
@@ -57,13 +57,13 @@ export class ViemMarketChain implements MarketChain {
   }
 
   async hasStockControls(token: Address): Promise<boolean> {
-    try {
-      await this.c.readContract({ address: token, abi: stockAbi, functionName: 'paused' });
-      await this.c.readContract({ address: token, abi: stockAbi, functionName: 'tokenPaused' });
-      return true;
-    } catch {
-      return false;
-    }
+    // only Robinhood beacon proxies count (anyone can deploy paused()/tokenPaused()); a failed read throws
+    // instead of silently classifying a real Stock Token as an ordinary token
+    const slot = await this.c.getStorageAt({ address: token, slot: EIP1967_BEACON_SLOT });
+    if (!slot || `0x${slot.slice(26)}`.toLowerCase() !== ROBINHOOD_STOCK_BEACON) return false;
+    await this.c.readContract({ address: token, abi: stockAbi, functionName: 'paused' });
+    await this.c.readContract({ address: token, abi: stockAbi, functionName: 'tokenPaused' });
+    return true;
   }
 
   async pool(a: Address, b: Address, fee: FeeTier): Promise<PoolState | null> {

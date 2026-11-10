@@ -2,6 +2,7 @@ import { encodeFunctionData, getAddress, keccak256, parseAbi, type Address, type
 import { privateKeyToAccount } from 'viem/accounts';
 import {
   EXPORT_MAX_TTL_SECONDS,
+  FEE_TIERS,
   Rejection,
   UNLIMITED_APPROVAL_THRESHOLD,
   decodePath,
@@ -43,7 +44,7 @@ export type SignedIntent = {
 export type SignerDeps = {
   config: Pick<
     SignerConfig,
-    'chainId' | 'router' | 'factory' | 'usdg' | 'weth' | 'agentDailyCap' | 'guardDailyCapFloor' | 'deadlineSeconds' | 'maxGasLimit' | 'maxFeePerGas'
+    'chainId' | 'router' | 'factory' | 'quoter' | 'maxSlippageBps' | 'usdg' | 'weth' | 'agentDailyCap' | 'guardDailyCapFloor' | 'deadlineSeconds' | 'maxGasLimit' | 'maxFeePerGas'
   >;
   seed: Uint8Array;
   policies: PolicyStore;
@@ -67,6 +68,8 @@ export class Signer {
     if (id !== this.d.config.chainId) throw new Rejection('chain_mismatch', `RPC chain ${id} != pinned ${this.d.config.chainId}`);
     const f = await this.d.chain.routerFactory(this.d.config.router);
     if (f !== this.d.config.factory) throw new Rejection('chain_mismatch', `router factory ${f} != pinned factory ${this.d.config.factory}`);
+    const qf = await this.d.chain.quoterFactory(this.d.config.quoter);
+    if (qf !== this.d.config.factory) throw new Rejection('chain_mismatch', `quoter factory ${qf} != pinned factory ${this.d.config.factory}`);
   }
 
   /** Public address for a derivation index, so the API can record a new agent wallet without the seed. */
@@ -142,6 +145,13 @@ export class Signer {
     const amountOutMin = BigInt(req.amountOutMin);
     if (amountOutMin === 0n) throw new Rejection('min_out_zero', 'amountOutMin must be > 0 (slippage protection)');
     await this.validateSwap(policy, req.swap.path as Hex, amountIn, channel);
+    // The caller's amountOutMin is not trusted: the signer prices the path itself (on the deepest pools,
+    // checked above) and refuses a minimum more than maxSlippageBps below its own quote.
+    const quoted = await this.read(() => this.d.chain.quote(this.d.config.quoter, req.swap.path as Hex, amountIn));
+    const floor = (quoted * BigInt(10_000 - this.d.config.maxSlippageBps)) / 10_000n;
+    if (amountOutMin < floor) {
+      throw new Rejection('slippage_too_high', `amountOutMin ${amountOutMin} is more than ${this.d.config.maxSlippageBps} bps below the quote ${quoted}`);
+    }
 
     const deadline = Math.floor(this.now().getTime() / 1000) + this.d.config.deadlineSeconds;
     const inner = encodeFunctionData({
@@ -161,6 +171,8 @@ export class Signer {
     // guards keep protecting paused agents; the agent itself can only act while active
     const allowed = channel === 'guard' ? p.status === 'active' || p.status === 'paused' : p.status === 'active';
     if (!allowed) throw new Rejection('agent_not_active', `agent status ${p.status} cannot sign on ${channel} channel`);
+    // paper agents never trade on chain; going live needs the owner's fresh SIWE at the API
+    if (p.mode !== 'live') throw new Rejection('agent_not_active', 'agent is in paper mode');
     // base assets are only USDG and ETH (as WETH) on Robinhood Chain
     if (p.quoteAsset !== this.d.config.usdg && p.quoteAsset !== this.d.config.weth) {
       throw new Rejection('quote_not_allowed', 'agent quote asset must be USDG or WETH');
@@ -193,12 +205,21 @@ export class Signer {
     }
     if (amountIn >= UNLIMITED_APPROVAL_THRESHOLD) throw new Rejection('approval_too_large', 'amount is at or above 2^255');
 
+    // Each hop must use a pool holding a real share of the pair's liquidity: a caller cannot route through a
+    // near-empty pool at an unused fee tier (priced by whoever created it) to drain the input.
     for (const h of hops) {
-      const pool = await this.read(() => this.d.chain.liquidPool(this.d.config.factory, h.tokenIn, h.tokenOut, h.fee));
-      if (!pool) throw new Rejection('no_pool', `no liquid pool for ${h.tokenIn}/${h.tokenOut} fee ${h.fee}`);
+      const liq = await this.read(() => Promise.all(FEE_TIERS.map((f) => this.d.chain.poolLiquidity(this.d.config.factory, h.tokenIn, h.tokenOut, f))));
+      const chosen = liq[FEE_TIERS.indexOf(h.fee as (typeof FEE_TIERS)[number])] ?? null;
+      if (!chosen) throw new Rejection('no_pool', `no liquid pool for ${h.tokenIn}/${h.tokenOut} fee ${h.fee}`);
+      const deepest = liq.reduce<bigint>((m, l) => (l !== null && l > m ? l : m), 0n);
+      if (chosen * 4n < deepest) {
+        throw new Rejection('no_pool', `pool ${h.tokenIn}/${h.tokenOut} fee ${h.fee} holds under 25% of the deepest pool's liquidity`);
+      }
     }
+    // Stock Token status is read from the chain (Robinhood beacon), never from app tables; reads fail closed.
     for (const t of tokens) {
-      if (!p.stockTokens.has(t)) continue;
+      if (t === this.d.config.usdg || t === this.d.config.weth) continue;
+      if (!(await this.read(() => this.d.chain.isStockToken(t)))) continue;
       if (await this.read(() => this.d.chain.isPaused(t))) throw new Rejection('token_paused', `stock token ${t} is paused`);
     }
     return path;
@@ -228,6 +249,8 @@ export class Signer {
     if (gas === 0n || gas > this.d.config.maxGasLimit) throw new Rejection('gas_limit_exceeded', `gas ${gas} outside (0, ${this.d.config.maxGasLimit}]`);
     if (maxFeePerGas > this.d.config.maxFeePerGas) throw new Rejection('fee_cap_exceeded', `maxFeePerGas above cap ${this.d.config.maxFeePerGas}`);
     if (maxPriorityFeePerGas > maxFeePerGas) throw new Rejection('fee_cap_exceeded', 'priority fee above max fee');
+    // a zero-fee tx could sit in a nonce forever and stall the wallet
+    if (maxFeePerGas === 0n) throw new Rejection('fee_cap_exceeded', 'maxFeePerGas must be > 0');
 
     const account = privateKeyToAccount(deriveAgentKey(this.d.seed, p.derivationIndex));
     if (account.address !== p.wallet) throw new Rejection('internal_error', 'derived key does not match the recorded agent wallet');
@@ -249,6 +272,7 @@ export class Signer {
         ? this.d.config.agentDailyCap
         : Math.max(this.d.config.guardDailyCapFloor, GUARD_SIGNATURES_PER_POSITION * p.openLivePositions);
     // recorded (and cap-checked) before the signature leaves the signer
+    // the agent channel may not replace a recent guard exit by reusing its nonce (guards are never blocked by the agent)
     await this.d.ledger.record({ agentId: p.agentId, channel, kind, txHash, nonce: g.nonce, cap }, this.now());
     return { from: p.wallet, to, txHash, signedTx, nonce: g.nonce };
   }

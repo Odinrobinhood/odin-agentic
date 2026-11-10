@@ -92,6 +92,11 @@ export function createChannelServer(signer: Signer, channel: Channel, token: str
 export function listen(server: Server, spec: string): Promise<void> {
   return new Promise((resolve, reject) => {
     server.once('error', reject);
+    // a local process holding sockets open must not starve the channel (slowloris)
+    server.headersTimeout = 5_000;
+    server.requestTimeout = 15_000;
+    server.keepAliveTimeout = 5_000;
+    server.maxConnections = 256;
     // "host:port" (loopback only) or a unix socket path
     const m = /^(127\.0\.0\.1|\[::1\]|localhost):(\d+)$/.exec(spec);
     if (m) server.listen(Number(m[2]), m[1]!.replace(/[[\]]/g, ''), () => resolve());

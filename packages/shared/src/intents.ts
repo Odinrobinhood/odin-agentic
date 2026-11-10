@@ -5,7 +5,7 @@ const uintString = z.string().regex(/^[0-9]+$/, 'must be a base-10 unsigned inte
 const hex = z.string().refine((v) => isHex(v), 'must be hex');
 
 export const GasParams = z.object({
-  nonce: z.number().int().nonnegative(),
+  nonce: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
   gas: uintString,
   maxFeePerGas: uintString,
   maxPriorityFeePerGas: uintString,
