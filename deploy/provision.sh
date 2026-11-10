@@ -66,6 +66,10 @@ if ! grep -q 'map=odinguard' "$PGDIR/pg_hba.conf"; then
 fi
 systemctl reload postgresql
 
+# Old-code processes must not write while (or right after) migrations change data: stop the app services
+# first; each is started again with the new code below. Signer and guard watcher keep running so TP/SL
+# protection never pauses for a deploy.
+systemctl stop odin-market odin-indexer odin-signals odin-watchdog odin-notifier odin-api odin-web odin-runtime odin-backtest 2>/dev/null || true
 sudo -u odin env DATABASE_URL='postgresql://odin@/odin?host=/var/run/postgresql' node "$APP/packages/db/src/migrate.ts"
 
 # --- signer service ------------------------------------------------------------------------------
