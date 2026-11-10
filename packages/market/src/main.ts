@@ -21,7 +21,7 @@ const health = new Health('market', 180000).listen(HEALTH_PORTS.market);
 // token catalog (every pool on the chain, so users can pick any token): runs beside the minute snapshots
 const discoveryChain = new ViemDiscoveryChain(cfg.rpcUrls);
 const discovery = new PoolDiscovery({ pool, chain: discoveryChain, factory: cfg.factory });
-const enricher = new CatalogEnricher({ pool, chain: discoveryChain, market: chain, usdg: cfg.usdg, weth: cfg.weth });
+const enricher = new CatalogEnricher({ pool, chain: discoveryChain, usdg: cfg.usdg, weth: cfg.weth, minDepthUsdg: Number(process.env.CATALOG_MIN_DEPTH_USDG ?? 10) });
 // two independent loops: discovery must not wait for metadata reads of thousands of tokens
 const background = (name: string, fn: () => Promise<boolean>) =>
   void (async () => {
@@ -41,7 +41,7 @@ background('pool discovery', async () => {
   return !d.caughtUp;
 });
 background('catalog', async () => {
-  const n = await enricher.step(40);
+  const n = await enricher.step();
   if (n) log({ msg: 'catalog enriched', tokens: n });
   return n > 0;
 });

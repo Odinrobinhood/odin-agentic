@@ -1,26 +1,39 @@
-import { createPublicClient, fallback, getAddress, http, parseAbi, type Address, type Hex } from 'viem';
+import { createPublicClient, fallback, getAddress, http, parseAbi, zeroAddress, type Address, type Hex } from 'viem';
 import type { Pool } from '@odin/db';
 import { sanitizeName, sanitizeSymbol } from '@odin/shared';
-import type { MarketChain } from './chain.ts';
 
 /** PoolCreated(address indexed token0, address indexed token1, uint24 indexed fee, int24 tickSpacing, address pool) */
 export const POOL_CREATED_TOPIC: Hex = '0x783cca1c0412dd0d695e784568c96da2e9c22ff989357a2e8b1d9b2b4e6b7118';
+/** Canonical Multicall3; its code is present on Robinhood Chain (checked 2026-11-10). */
+export const MULTICALL3: Address = '0xcA11bde05977b3631167028862bE2a173976CA11';
 
 export type CreatedPool = { pool: Address; token0: Address; token1: Address; fee: number; block: bigint };
+export type TokenFacts = { decimals: number | null; symbol: unknown; name: unknown; stock: boolean };
 
 export interface DiscoveryChain {
   head(): Promise<bigint>;
   hasCode(address: Address, at: bigint): Promise<boolean>;
   poolCreated(factory: Address, from: bigint, to: bigint): Promise<CreatedPool[]>;
-  balanceOf(token: Address, holder: Address): Promise<bigint>;
+  /** balanceOf(holder) per (token, holder) pair, batched; a failed read is 0. */
+  balances(pairs: { token: Address; holder: Address }[]): Promise<bigint[]>;
+  /** decimals / symbol / name and the Stock Token controls, batched; unreadable fields are null / ''. */
+  facts(tokens: Address[]): Promise<TokenFacts[]>;
 }
 
 const word = (t: string | undefined) => getAddress(`0x${(t ?? '').slice(-40)}`);
+const erc20 = parseAbi([
+  'function balanceOf(address) view returns (uint256)',
+  'function decimals() view returns (uint8)',
+  'function symbol() view returns (string)',
+  'function name() view returns (string)',
+  'function paused() view returns (bool)',
+  'function isBlocked(address) view returns (bool)',
+]);
 
 export class ViemDiscoveryChain implements DiscoveryChain {
   private readonly c;
   constructor(rpcUrls: string[]) {
-    this.c = createPublicClient({ transport: fallback(rpcUrls.map((u) => http(u, { timeout: 20_000, retryCount: 1 })), { rank: false }) });
+    this.c = createPublicClient({ transport: fallback(rpcUrls.map((u) => http(u, { timeout: 30_000, retryCount: 1 })), { rank: false }) });
   }
   head() {
     return this.c.getBlockNumber();
@@ -38,8 +51,34 @@ export class ViemDiscoveryChain implements DiscoveryChain {
       .filter((l) => l.topics.length === 4 && l.data.length >= 2 + 128)
       .map((l) => ({ token0: word(l.topics[1]), token1: word(l.topics[2]), fee: Number(BigInt(l.topics[3]!)), pool: word(`0x${l.data.slice(66, 130)}`), block: BigInt(l.blockNumber) }));
   }
-  balanceOf(token: Address, holder: Address) {
-    return this.c.readContract({ address: token, abi: parseAbi(['function balanceOf(address) view returns (uint256)']), functionName: 'balanceOf', args: [holder] });
+  async balances(pairs: { token: Address; holder: Address }[]) {
+    const r = await this.c.multicall({
+      multicallAddress: MULTICALL3,
+      allowFailure: true,
+      batchSize: 16_384,
+      contracts: pairs.map((p) => ({ address: p.token, abi: erc20, functionName: 'balanceOf' as const, args: [p.holder] as const })),
+    });
+    return r.map((x) => (x.status === 'success' ? (x.result as bigint) : 0n));
+  }
+  async facts(tokens: Address[]) {
+    const calls = tokens.flatMap((t) => [
+      { address: t, abi: erc20, functionName: 'decimals' as const },
+      { address: t, abi: erc20, functionName: 'symbol' as const },
+      { address: t, abi: erc20, functionName: 'name' as const },
+      { address: t, abi: erc20, functionName: 'paused' as const },
+      { address: t, abi: erc20, functionName: 'isBlocked' as const, args: [zeroAddress] as const },
+    ]);
+    // mixed return types across the five calls: read results untyped and narrow per field below
+    const r = (await this.c.multicall({ multicallAddress: MULTICALL3, allowFailure: true, batchSize: 16_384, contracts: calls } as never)) as { status: 'success' | 'failure'; result?: unknown }[];
+    return tokens.map((_, i) => {
+      const [dec, sym, nam, paused, blocked] = r.slice(i * 5, i * 5 + 5);
+      return {
+        decimals: dec?.status === 'success' ? Number(dec.result) : null,
+        symbol: sym?.status === 'success' ? sym.result : '',
+        name: nam?.status === 'success' ? nam.result : '',
+        stock: paused?.status === 'success' && blocked?.status === 'success',
+      };
+    });
   }
 }
 
@@ -92,10 +131,12 @@ export class PoolDiscovery {
       }
     }
     if (logs === null) throw new Error('eth_getLogs keeps failing for PoolCreated');
-    for (const p of logs) {
+    for (let i = 0; i < logs.length; i += 1000) {
+      const chunk = logs.slice(i, i + 1000);
       await this.pool.query(
-        `INSERT INTO discovered_pools (pool, token0, token1, fee, created_block) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING`,
-        [p.pool.toLowerCase(), p.token0.toLowerCase(), p.token1.toLowerCase(), p.fee, p.block.toString()],
+        `INSERT INTO discovered_pools (pool, token0, token1, fee, created_block)
+         SELECT * FROM unnest($1::text[], $2::text[], $3::text[], $4::int[], $5::bigint[]) ON CONFLICT DO NOTHING`,
+        [chunk.map((p) => p.pool.toLowerCase()), chunk.map((p) => p.token0.toLowerCase()), chunk.map((p) => p.token1.toLowerCase()), chunk.map((p) => p.fee), chunk.map((p) => p.block.toString())],
       );
     }
     await this.pool.query('UPDATE indexer_state SET last_block = $2, updated_at = now() WHERE stream = $1', [this.stream, to.toString()]);
@@ -116,85 +157,100 @@ async function deploymentBlock(chain: DiscoveryChain, address: Address, head: bi
 }
 
 /**
- * Catalog enrichment: metadata (sanitized), Stock Token probe, tradability (has a USDG or WETH pool) and a
- * depth hint for every discovered token. Stale rows are refreshed daily. Nothing here limits what a user
- * may pick; it only makes every token findable.
+ * Catalog enrichment in two phases. (A) Depth: for every token with a USDG or WETH pool, the base-asset
+ * balance held by those pools, read in large multicall batches and valued in USDG; refreshed daily.
+ * (B) Metadata (sanitized labels, Stock Token probe) only for tokens at or above `minDepthUsdg`, so tens of
+ * thousands of empty launchpad tokens do not cost metadata reads. Nothing here limits what a user may
+ * pick: any token can still be added by address.
  */
 export class CatalogEnricher {
   private readonly pool: Pool;
   private readonly chain: DiscoveryChain;
-  private readonly market: Pick<MarketChain, 'tokenMeta' | 'hasStockControls'>;
   private readonly usdg: Address;
   private readonly weth: Address;
+  private readonly minDepthUsdg: number;
 
-  constructor(deps: { pool: Pool; chain: DiscoveryChain; market: Pick<MarketChain, 'tokenMeta' | 'hasStockControls'>; usdg: Address; weth: Address }) {
+  constructor(deps: { pool: Pool; chain: DiscoveryChain; usdg: Address; weth: Address; minDepthUsdg?: number }) {
     this.pool = deps.pool;
     this.chain = deps.chain;
-    this.market = deps.market;
     this.usdg = deps.usdg;
     this.weth = deps.weth;
+    this.minDepthUsdg = deps.minDepthUsdg ?? 10;
   }
 
-  async step(limit = 25): Promise<number> {
+  /** Returns how many tokens were processed (0 = nothing due). */
+  async step(depthBatch = 2000, metaBatch = 200): Promise<number> {
+    return (await this.depthPhase(depthBatch)) + (await this.metaPhase(metaBatch));
+  }
+
+  private async depthPhase(limit: number): Promise<number> {
+    const u = this.usdg.toLowerCase();
+    const w = this.weth.toLowerCase();
+    // tokens with a base pool whose depth is missing or older than a day
     const due = await this.pool.query<{ token: string }>(
-      `SELECT t.token FROM (SELECT token0 AS token FROM discovered_pools UNION SELECT token1 FROM discovered_pools) t
-         LEFT JOIN token_catalog c ON c.address = t.token
-        WHERE c.address IS NULL OR c.enriched_at < now() - interval '1 day'
-        ORDER BY c.enriched_at NULLS FIRST LIMIT $1`,
-      [limit],
+      `SELECT x.token FROM (
+          SELECT DISTINCT CASE WHEN token0 IN ($1, $2) THEN token1 ELSE token0 END AS token
+            FROM discovered_pools WHERE token0 IN ($1, $2) OR token1 IN ($1, $2)) x
+         LEFT JOIN token_catalog c ON c.address = x.token
+        WHERE c.depth_checked_at IS NULL OR c.depth_checked_at < now() - interval '1 day'
+        ORDER BY c.depth_checked_at NULLS FIRST LIMIT $3`,
+      [u, w, limit],
     );
-    const wethPrice = await this.pool.query<{ price: string }>('SELECT price FROM market_snapshots WHERE token_address = $1 ORDER BY ts DESC LIMIT 1', [this.weth.toLowerCase()]);
-    const wethUsdg = wethPrice.rows[0] ? Number(wethPrice.rows[0].price) : null;
-    // a few at a time: fast enough for a chain-wide backfill, gentle on public RPCs
-    for (let i = 0; i < due.rows.length; i += 4) {
-      await Promise.all(due.rows.slice(i, i + 4).map(({ token }) => this.enrich(getAddress(token), wethUsdg)));
-    }
-    return due.rows.length;
-  }
-
-  private async enrich(token: Address, wethUsdg: number | null) {
+    if (!due.rowCount) return 0;
+    const tokens = due.rows.map((r) => r.token);
     const pools = await this.pool.query<{ pool: string; token0: string; token1: string }>(
-      'SELECT pool, token0, token1 FROM discovered_pools WHERE token0 = $1 OR token1 = $1',
-      [token.toLowerCase()],
+      `SELECT pool, token0, token1 FROM discovered_pools
+        WHERE (token0 = ANY($1) AND token1 IN ($2, $3)) OR (token1 = ANY($1) AND token0 IN ($2, $3))`,
+      [tokens, u, w],
     );
-    let meta;
-    try {
-      meta = await this.market.tokenMeta(token);
-    } catch (e) {
-      await this.save(token, { symbol: '', name: '', decimals: null, stock: false, tradable: false, depth: null, pools: pools.rowCount ?? 0, error: `not a readable ERC-20: ${(e as Error).message.split('\n')[0]}` });
-      return;
-    }
-    const isBase = token === this.usdg || token === this.weth;
-    let depth = 0;
-    let tradable = isBase;
-    for (const p of pools.rows) {
-      const other = getAddress(p.token0 === token.toLowerCase() ? p.token1 : p.token0);
-      if (other !== this.usdg && other !== this.weth) continue;
-      tradable = true;
-      const bal = await this.chain.balanceOf(other, getAddress(p.pool)).catch(() => 0n);
-      depth += other === this.usdg ? Number(bal) / 1e6 : wethUsdg === null ? 0 : (Number(bal) / 1e18) * wethUsdg;
-    }
-    await this.save(token, {
-      symbol: sanitizeSymbol(meta.symbol), name: sanitizeName(meta.name), decimals: meta.decimals,
-      stock: await this.market.hasStockControls(token), tradable, depth: tradable ? depth : null, pools: pools.rowCount ?? 0, error: null,
+    const pairs = pools.rows.map((p) => {
+      const base = p.token0 === u || p.token0 === w ? p.token0 : p.token1;
+      return { token: getAddress(base), holder: getAddress(p.pool), subject: base === p.token0 ? p.token1 : p.token0 };
     });
+    const bal = await this.chain.balances(pairs);
+    const wp = await this.pool.query<{ price: string }>('SELECT price FROM market_snapshots WHERE token_address = $1 ORDER BY ts DESC LIMIT 1', [w]);
+    const wethUsdg = wp.rows[0] ? Number(wp.rows[0].price) : 0;
+    const depth = new Map<string, { usdg: number; pools: number }>();
+    pairs.forEach((p, i) => {
+      const v = p.token.toLowerCase() === u ? Number(bal[i]!) / 1e6 : (Number(bal[i]!) / 1e18) * wethUsdg;
+      const d = depth.get(p.subject) ?? { usdg: 0, pools: 0 };
+      depth.set(p.subject, { usdg: d.usdg + v, pools: d.pools + 1 });
+    });
+    await this.pool.query(
+      `INSERT INTO token_catalog (address, tradable, depth_usdg, pools, depth_checked_at)
+       SELECT a, true, d, n, now() FROM unnest($1::text[], $2::numeric[], $3::int[]) AS t(a, d, n)
+       ON CONFLICT (address) DO UPDATE SET tradable = true, depth_usdg = EXCLUDED.depth_usdg, pools = EXCLUDED.pools, depth_checked_at = now()`,
+      [tokens, tokens.map((t) => depth.get(t)?.usdg ?? 0), tokens.map((t) => depth.get(t)?.pools ?? 0)],
+    );
+    return tokens.length;
   }
 
-  private async save(token: Address, r: { symbol: string; name: string; decimals: number | null; stock: boolean; tradable: boolean; depth: number | null; pools: number; error: string | null }) {
-    await this.pool.query(
-      `INSERT INTO token_catalog (address, symbol, name, decimals, is_stock_token, tradable, depth_usdg, pools, error, enriched_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
-       ON CONFLICT (address) DO UPDATE SET symbol = EXCLUDED.symbol, name = EXCLUDED.name, decimals = EXCLUDED.decimals,
-         is_stock_token = EXCLUDED.is_stock_token, tradable = EXCLUDED.tradable, depth_usdg = EXCLUDED.depth_usdg,
-         pools = EXCLUDED.pools, error = EXCLUDED.error, enriched_at = now()`,
-      [token.toLowerCase(), r.symbol, r.name, r.decimals, r.stock, r.tradable, r.depth, r.pools, r.error],
+  private async metaPhase(limit: number): Promise<number> {
+    const due = await this.pool.query<{ address: string }>(
+      `SELECT address FROM token_catalog
+        WHERE depth_usdg >= $1 AND (meta_at IS NULL OR meta_at < now() - interval '7 days')
+        ORDER BY depth_usdg DESC LIMIT $2`,
+      [this.minDepthUsdg, limit],
     );
+    if (!due.rowCount) return 0;
+    const tokens = due.rows.map((r) => getAddress(r.address));
+    const facts = await this.chain.facts(tokens);
+    for (let i = 0; i < tokens.length; i++) {
+      const f = facts[i]!;
+      const ok = f.decimals !== null && f.decimals <= 77;
+      await this.pool.query(
+        `UPDATE token_catalog SET symbol = $2, name = $3, decimals = $4, is_stock_token = $5, error = $6, meta_at = now(), enriched_at = now() WHERE address = $1`,
+        [tokens[i]!.toLowerCase(), sanitizeSymbol(f.symbol), sanitizeName(f.name), ok ? f.decimals : null, f.stock, ok ? null : 'not a readable ERC-20 (no decimals())'],
+      );
+    }
+    return tokens.length;
   }
 }
 
 /**
- * Search the catalog by symbol, name or address. Flags a token whose symbol is also used by a deeper
- * token, because symbols can be copied by anyone (identity is the address).
+ * Search the catalog by symbol, name or address. Only tokens with metadata are listed by symbol/name; an
+ * exact address always resolves. Flags a token whose symbol is also used by a deeper token, because
+ * symbols can be copied by anyone (identity is the address).
  */
 export async function searchCatalog(pool: Pool, q: string, limit = 25) {
   const term = q.trim();
@@ -202,12 +258,12 @@ export async function searchCatalog(pool: Pool, q: string, limit = 25) {
   const r = await pool.query(
     `SELECT c.address, c.symbol, c.name, c.decimals, c.is_stock_token, c.tradable, c.depth_usdg::float AS depth_usdg, c.pools,
             (t.address IS NOT NULL) AS registered,
-            EXISTS (SELECT 1 FROM token_catalog o WHERE upper(o.symbol) = upper(c.symbol) AND o.address <> c.address
+            EXISTS (SELECT 1 FROM token_catalog o WHERE c.symbol <> '' AND upper(o.symbol) = upper(c.symbol) AND o.address <> c.address
                      AND COALESCE(o.depth_usdg, 0) > COALESCE(c.depth_usdg, 0)) AS symbol_shadowed
        FROM token_catalog c LEFT JOIN tokens t ON t.address = c.address
       WHERE c.error IS NULL AND (
             ($1 AND c.address = lower($2))
-         OR (NOT $1 AND ($2 = '' OR upper(c.symbol) LIKE upper($2) || '%' OR c.name ILIKE '%' || $2 || '%')))
+         OR (NOT $1 AND c.meta_at IS NOT NULL AND ($2 = '' OR upper(c.symbol) LIKE upper($2) || '%' OR c.name ILIKE '%' || $2 || '%')))
       ORDER BY c.tradable DESC, c.depth_usdg DESC NULLS LAST LIMIT $3`,
     [byAddress, term.replace(/[%_\\]/g, ''), Math.min(Math.max(limit, 1), 100)],
   );

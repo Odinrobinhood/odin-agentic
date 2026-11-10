@@ -34,9 +34,10 @@ describe.skipIf(!url)('token catalog (postgres)', () => {
       }
       return created.filter((p) => p.block >= from && p.block <= to);
     },
-    balanceOf: async (token, holder) => balances.get(`${token}:${holder}`) ?? 0n,
+    balances: async (pairs) => pairs.map((p) => balances.get(`${p.token}:${p.holder}`) ?? 0n),
+    facts: async (tokens) => tokens.map((t) => { const m = meta.get(t); return m ? { ...m, stock: false } : { decimals: null, symbol: '', name: '', stock: false }; }),
   };
-  const meta = new Map<string, { decimals: number; symbol: unknown; name: unknown }>([
+  const meta = new Map<string, { decimals: number | null; symbol: unknown; name: unknown }>([
     [REAL, { decimals: 18, symbol: 'ROBO', name: 'Robo Token' }],
     [FAKE, { decimals: 18, symbol: 'ROBO', name: 'Robo Token‮ (official)' }],
     [ORPHAN, { decimals: 9, symbol: 'ORPH', name: 'Orphan' }],
@@ -66,18 +67,15 @@ describe.skipIf(!url)('token catalog (postgres)', () => {
   });
 
   it('enriches tokens: sanitized labels, tradability via USDG/WETH, depth; search flags copied symbols', async () => {
-    const e = new CatalogEnricher({
-      pool, chain, usdg: USDG, weth: WETH,
-      market: { tokenMeta: async (t) => meta.get(t) ?? Promise.reject(new Error('revert')), hasStockControls: async () => false },
-    });
-    while ((await e.step(50)) > 0);
+    const e = new CatalogEnricher({ pool, chain, usdg: USDG, weth: WETH, minDepthUsdg: 10 });
+    while ((await e.step(50, 50)) > 0);
     const rows = await searchCatalog(pool, 'ROBO');
     expect(rows.map((r: { address: string }) => getAddress(r.address))).toEqual([REAL, FAKE]); // deepest first
     expect(rows[0]).toMatchObject({ tradable: true, depth_usdg: 50_000, symbol_shadowed: false });
     expect(rows[1]).toMatchObject({ tradable: true, symbol_shadowed: true, name: 'Robo Token (official)' });
     expect(rows[1].depth_usdg).toBeCloseTo(20, 6); // 0.01 WETH * 2000
-    const orphan = await searchCatalog(pool, ORPHAN);
-    expect(orphan[0]).toMatchObject({ tradable: false, depth_usdg: null });
+    // no USDG/WETH pool: not routable, so not catalogued (still addable by pasting the address)
+    expect(await searchCatalog(pool, ORPHAN)).toEqual([]);
     expect(await searchCatalog(pool, '%')).toEqual(await searchCatalog(pool, '')); // LIKE wildcards are stripped
   });
 });
