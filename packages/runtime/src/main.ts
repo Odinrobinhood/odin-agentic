@@ -3,9 +3,13 @@ import { randomUUID } from 'node:crypto';
 import { buildRuntime } from './wiring.ts';
 import { PgSchedule } from './scheduler.ts';
 import { runTick } from './tick.ts';
+import { PgTriggerStore, TriggerWatcher } from './triggers.ts';
+import { PgRuleData } from '@odin/signals';
 
 const { pool, deps } = buildRuntime();
 const schedule = new PgSchedule(pool);
+const triggers = new TriggerWatcher({ store: new PgTriggerStore(pool), data: new PgRuleData(pool, (process.env.CHAIN_RPC_URLS ?? '').split(',').filter(Boolean)) });
+let lastTriggerCheck = 0;
 const owner = `${hostname()}:${process.pid}:${randomUUID().slice(0, 8)}`;
 const CONCURRENCY = Number(process.env.RUNTIME_CONCURRENCY ?? 8);
 const LEASE_MS = 5 * 60_000; // longer than any tick: LLM call + approve + swap until deadline
@@ -17,6 +21,10 @@ const running = new Set<string>();
 for (;;) {
   try {
     await schedule.enroll();
+    if (Date.now() - lastTriggerCheck >= 15_000) {
+      lastTriggerCheck = Date.now();
+      for (const t of await triggers.checkOnce().catch(() => [])) log({ msg: 'trigger', ...t });
+    }
     const free = CONCURRENCY - running.size;
     const due = free > 0 ? await schedule.claimDue(owner, free, LEASE_MS) : [];
     for (const agentId of due) {
@@ -24,7 +32,7 @@ for (;;) {
       void (async () => {
         let error: string | undefined;
         try {
-          const r = await runTick(deps, agentId);
+          const r = await runTick(deps, agentId, { wake: await schedule.takeWakeReason(agentId) });
           log({ msg: 'tick', agentId, ...r, ...('amountIn' in r ? { amountIn: r.amountIn.toString(), amountOut: r.amountOut.toString() } : {}) });
         } catch (e) {
           error = (e as Error).message.slice(0, 500);

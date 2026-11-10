@@ -156,6 +156,14 @@ describe('runTick', () => {
     expect(store.decisions.map((d) => d.action)).toEqual(['hold', 'hold']);
   });
 
+  it('passes the trigger that woke the tick to the model', async () => {
+    decideResult = { ...buy, decision: { ...(buy as { decision: object }).decision, action: 'hold', token: null, size: null } } as DecideResult;
+    await runTick(deps, 'a1', { wake: { trigger: 0, condition: 'price_below' } });
+    expect(seen.ctx!.data).toMatchObject({ woken_by_trigger: { trigger: 0, condition: 'price_below' } });
+    await runTick(deps, 'a1');
+    expect(seen.ctx!.data).not.toHaveProperty('woken_by_trigger');
+  });
+
   it('skips agents that are not active', async () => {
     store.agent = agent({ status: 'paused' });
     expect(await runTick(deps, 'a1')).toEqual({ outcome: 'skipped', reason: 'agent is paused' });

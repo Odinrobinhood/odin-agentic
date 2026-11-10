@@ -4,3 +4,4 @@ export * from './store.ts';
 export * from './tick.ts';
 export * from './scheduler.ts';
 export * from './wiring.ts';
+export * from './triggers.ts';

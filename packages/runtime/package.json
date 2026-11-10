@@ -3,14 +3,19 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
-  "scripts": { "start": "node src/main.ts" },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "start": "node src/main.ts"
+  },
   "dependencies": {
     "@odin/db": "workspace:*",
     "@odin/decision": "workspace:*",
     "@odin/executor": "workspace:*",
     "@odin/risk": "workspace:*",
     "@odin/shared": "workspace:*",
+    "@odin/signals": "workspace:*",
     "pg": "8.13.1",
     "viem": "2.21.54"
   }

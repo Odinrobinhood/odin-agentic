@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { Pool } from '@odin/db';
 import type { TokenRegistry } from '@odin/market';
 import { Rejection } from '@odin/shared';
+import { TriggerSpec } from '@odin/signals';
 
 /** Models offered at launch (architecture §11.2); must match the Decision Engine's provider. */
 export const SUPPORTED_MODELS = ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'] as const;
@@ -26,7 +27,8 @@ export const ConfigInput = z
       .strict()
       .default({}),
     cadenceSeconds: z.number().int().min(60).max(7 * 86_400),
-    triggers: z.array(z.unknown()).max(20).default([]),
+    /** Price triggers that wake the agent early (architecture §3.5). */
+    triggers: z.array(TriggerSpec).max(10).default([]),
   })
   .strict();
 

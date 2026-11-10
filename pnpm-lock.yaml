@@ -273,6 +273,9 @@ importers:
       '@odin/shared':
         specifier: workspace:*
         version: link:../shared
+      '@odin/signals':
+        specifier: workspace:*
+        version: link:../signals
       pg:
         specifier: 8.13.1
         version: 8.13.1

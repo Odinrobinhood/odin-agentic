@@ -32,7 +32,7 @@ const LLM_CODES: Record<Exclude<DecideResult, { ok: true }>['reason'], Rejection
  *  4. risk → reject → store code             5–6. approve/swap via signer + executor (live) or paper fill
  *  7. update positions                       8. arm TP/SL guards          9. notify
  */
-export async function runTick(deps: TickDeps, agentId: string): Promise<TickResult> {
+export async function runTick(deps: TickDeps, agentId: string, opts: { wake?: Record<string, unknown> | null } = {}): Promise<TickResult> {
   const agent = await deps.store.loadAgent(agentId);
   if (!agent) return { outcome: 'skipped', reason: 'agent has no wallet or config' };
   if (agent.status !== 'active') return { outcome: 'skipped', reason: `agent is ${agent.status}` };
@@ -66,6 +66,8 @@ export async function runTick(deps: TickDeps, agentId: string): Promise<TickResu
         .filter((p) => p.token !== agent.quote.address)
         .map((p) => ({ token: p.token, qty: formatUnits(p.qty, dec.get(p.token) ?? 18), avg_entry_price_quote: p.avgEntryPrice })),
       recent_decisions: history,
+      // set when a price trigger pulled this tick forward (architecture §3.5)
+      ...(opts.wake ? { woken_by_trigger: opts.wake } : {}),
     },
   };
 

@@ -82,6 +82,9 @@ echo "== runtime: paper ticks with a scripted decision provider (real risk engin
 (cd "$APP" && sudo -u odin env $(grep -v '^#' /etc/odin/chain.env | xargs) STAGING_AGENT_ID="$AGENT" \
   node packages/runtime/scripts/staging-tick.ts)
 
+echo "== price triggers on the real WETH price"
+(cd "$APP" && sudo -u odin env $(grep -v '^#' /etc/odin/chain.env | xargs) STAGING_AGENT_ID="$AGENT" node packages/runtime/scripts/staging-triggers.ts)
+
 echo "== guard watcher (as odin-guard): stop loss fires at the real realizable price, even after WETH was removed from the agent assets"
 systemctl stop odin-guard  # avoid racing the running watcher
 # held-token exit (user decision): remove WETH from the agent's assets while the paper position is open;

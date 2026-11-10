@@ -159,6 +159,7 @@ function Strategy({ id, agent, reload }: { id: string; agent: Any; reload: () =>
     candlesCount: c.context_inputs?.candles?.count ?? 16,
     history: c.context_inputs?.history ?? 5,
   });
+  const [triggers, setTriggers] = useState<Any[]>(c.triggers ?? []);
   const [versions, setVersions] = useState<Any[]>([]);
   const { run, view } = useMsg();
   useEffect(() => {
@@ -169,6 +170,7 @@ function Strategy({ id, agent, reload }: { id: string; agent: Any; reload: () =>
       await call('POST', `/agents/${id}/config`, {
         systemPrompt: f.systemPrompt, model: f.model, quoteAsset: f.quoteAsset, cadenceSeconds: Number(f.cadenceSeconds), maxTokens: Number(f.maxTokens),
         contextInputs: { candles: { period_minutes: Number(f.candlesPeriod), count: Number(f.candlesCount) }, history: Number(f.history) },
+        triggers,
       });
       reload();
       setVersions(await call('GET', `/agents/${id}/configs`));
@@ -191,6 +193,8 @@ function Strategy({ id, agent, reload }: { id: string; agent: Any; reload: () =>
         <div className="row" style={{ marginTop: 12 }}><button onClick={save}>Save as new version</button></div>
         {view}
       </div>
+      <h2>Price triggers (wake the agent early)</h2>
+      <Triggers value={triggers} onChange={setTriggers} />
       <h2>Versions</h2>
       <div className="panel">
         <table>
@@ -206,6 +210,50 @@ function Strategy({ id, agent, reload }: { id: string; agent: Any; reload: () =>
         </table>
       </div>
     </>
+  );
+}
+
+const TRIGGERS: Record<string, { label: string; fields: [string, string][] }> = {
+  price_above: { label: 'Price at or above', fields: [['price', 'Price (USDG)']] },
+  price_below: { label: 'Price at or below', fields: [['price', 'Price (USDG)']] },
+  change_pct: { label: 'Moves by % within minutes', fields: [['pct', 'Change %'], ['minutes', 'Minutes']] },
+  volume_above: { label: 'Swap volume above', fields: [['amount', 'Tokens'], ['minutes', 'Minutes']] },
+};
+
+/** Triggers are saved with the strategy (new version). Each wakes the agent once when its condition starts to hold. */
+function Triggers({ value, onChange }: { value: Any[]; onChange: (v: Any[]) => void }) {
+  const [cond, setCond] = useState('price_below');
+  const [token, setToken] = useState('');
+  const [vals, setVals] = useState<Record<string, string>>({});
+  const add = () => {
+    onChange([...value, { condition: cond, token, ...Object.fromEntries(TRIGGERS[cond]!.fields.map(([k]) => [k, Number(vals[k])])) }]);
+    setVals({});
+  };
+  return (
+    <div className="panel">
+      <table>
+        <tbody>
+          {value.map((t, i) => (
+            <tr key={i}>
+              <td>{TRIGGERS[t.condition]?.label ?? t.condition}</td>
+              <td className="mono">{short(t.token)}</td>
+              <td>{TRIGGERS[t.condition]?.fields.map(([k]) => `${k}=${t[k]}`).join(' ')}</td>
+              <td><button className="ghost" onClick={() => onChange(value.filter((_, j) => j !== i))}>Remove</button></td>
+            </tr>
+          ))}
+          {value.length === 0 && <tr><td className="muted">No triggers: the agent runs on its cadence only.</td></tr>}
+        </tbody>
+      </table>
+      <div className="grid" style={{ marginTop: 12 }}>
+        <div><label>Condition</label><select value={cond} onChange={(e) => (setCond(e.target.value), setVals({}))}>{Object.entries(TRIGGERS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</select></div>
+        <div><label>Token address</label><input value={token} onChange={(e) => setToken(e.target.value)} placeholder="0x…" /></div>
+        {TRIGGERS[cond]!.fields.map(([k, l]) => <div key={k}><label>{l}</label><input value={vals[k] ?? ''} onChange={(e) => setVals({ ...vals, [k]: e.target.value })} /></div>)}
+      </div>
+      <div className="row" style={{ marginTop: 8 }}>
+        <button className="ghost" onClick={add} disabled={!/^0x[0-9a-fA-F]{40}$/.test(token) || TRIGGERS[cond]!.fields.some(([k]) => !(Number(vals[k]) > 0))}>Add trigger</button>
+        <span className="muted">Saved with “Save as new version”.</span>
+      </div>
+    </div>
   );
 }
 

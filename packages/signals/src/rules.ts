@@ -4,12 +4,21 @@ import { getAddress, isAddress, type Address } from 'viem';
 const addr = z.string().refine((v) => isAddress(v, { strict: false }), 'must be an address').transform((v) => getAddress(v));
 const positive = z.number().positive().finite();
 
+const priceAbove = z.object({ condition: z.literal('price_above'), token: addr, price: positive }).strict();
+const priceBelow = z.object({ condition: z.literal('price_below'), token: addr, price: positive }).strict();
+const changePct = z.object({ condition: z.literal('change_pct'), token: addr, minutes: z.number().int().min(1).max(1440), pct: positive }).strict();
+const volumeAbove = z.object({ condition: z.literal('volume_above'), token: addr, minutes: z.number().int().min(1).max(1440), amount: positive }).strict();
+
+/** Agent price triggers (architecture §3.5): market conditions that wake an agent outside its cadence. */
+export const TriggerSpec = z.discriminatedUnion('condition', [priceAbove, priceBelow, changePct, volumeAbove]);
+export type TriggerSpec = z.infer<typeof TriggerSpec>;
+
 /** User-defined rule alerts (architecture §3.14). Conditions on price, change, volume, liquidity, transfers, wallets. */
 export const RuleSpec = z.discriminatedUnion('condition', [
-  z.object({ condition: z.literal('price_above'), token: addr, price: positive }).strict(),
-  z.object({ condition: z.literal('price_below'), token: addr, price: positive }).strict(),
-  z.object({ condition: z.literal('change_pct'), token: addr, minutes: z.number().int().min(1).max(1440), pct: positive }).strict(),
-  z.object({ condition: z.literal('volume_above'), token: addr, minutes: z.number().int().min(1).max(1440), amount: positive }).strict(),
+  priceAbove,
+  priceBelow,
+  changePct,
+  volumeAbove,
   z.object({ condition: z.literal('liquidity_below'), pool: addr, liquidity: z.string().regex(/^[0-9]{1,40}$/) }).strict(),
   z.object({ condition: z.literal('large_transfer'), token: addr, amount: positive }).strict(),
   z.object({ condition: z.literal('wallet_activity'), address: addr }).strict(),

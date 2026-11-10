@@ -8,6 +8,8 @@ export interface Schedule {
   claimDue(owner: string, limit: number, leaseMs: number): Promise<string[]>;
   /** Release the lease and schedule the next tick; repeated errors pause the agent. */
   complete(agentId: string, owner: string, result: { error?: string }): Promise<{ paused: boolean }>;
+  /** Read and clear why a trigger pulled this tick forward (null for a regular cadence tick). */
+  takeWakeReason(agentId: string): Promise<Record<string, unknown> | null>;
 }
 
 export const CADENCE_FLOOR_SECONDS = 60;
@@ -41,6 +43,15 @@ export class PgSchedule implements Schedule {
       [owner, limit, leaseMs],
     );
     return r.rows.map((x) => x.agent_id);
+  }
+
+  async takeWakeReason(agentId: string): Promise<Record<string, unknown> | null> {
+    const r = await this.pool.query<{ wake_reason: Record<string, unknown> | null }>(
+      `UPDATE agent_schedule s SET wake_reason = NULL FROM (SELECT wake_reason FROM agent_schedule WHERE agent_id = $1 FOR UPDATE) old
+        WHERE s.agent_id = $1 RETURNING old.wake_reason`,
+      [agentId],
+    );
+    return r.rows[0]?.wake_reason ?? null;
   }
 
   async complete(agentId: string, owner: string, result: { error?: string }): Promise<{ paused: boolean }> {

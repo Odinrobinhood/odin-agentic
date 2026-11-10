@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { randomBytes } from 'node:crypto';
 import { createPool, type Pool } from '@odin/db';
 import { PgSchedule } from '../src/scheduler.ts';
+import { PgTriggerStore } from '../src/triggers.ts';
 
 // Runs only against a real, migrated Postgres: TEST_DATABASE_URL=postgresql://...
 const url = process.env.TEST_DATABASE_URL;
@@ -44,6 +45,19 @@ describe.skipIf(!url)('PgSchedule (postgres)', () => {
     expect(r.rows[0]!.lease_owner).toBeNull();
     expect(r.rows[0]!.secs).toBeGreaterThanOrEqual(118); // cadence 120s
     expect(await s.claimDue('w9', 100, 60_000)).not.toContain(agentId);
+  });
+
+  it('a trigger wake pulls the tick forward unless the agent is leased, and the reason is read once', async () => {
+    const s = new PgSchedule(pool);
+    const store = new PgTriggerStore(pool);
+    await pool.query("UPDATE agent_schedule SET next_tick_at = now() + interval '1 hour', lease_until = now() + interval '1 minute' WHERE agent_id = $1", [agentId]);
+    expect(await store.wake(agentId, { trigger: 0 })).toBe(false);
+    await pool.query('UPDATE agent_schedule SET lease_until = NULL WHERE agent_id = $1', [agentId]);
+    expect(await store.wake(agentId, { trigger: 0 })).toBe(true);
+    expect(await s.claimDue('w', 100, 60_000)).toContain(agentId);
+    expect(await s.takeWakeReason(agentId)).toEqual({ trigger: 0 });
+    expect(await s.takeWakeReason(agentId)).toBeNull();
+    await s.complete(agentId, 'w', {});
   });
 
   it('pauses an agent after repeated tick errors', async () => {
