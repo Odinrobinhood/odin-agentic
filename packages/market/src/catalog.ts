@@ -1,4 +1,4 @@
-import { createPublicClient, fallback, getAddress, http, parseAbi, zeroAddress, type Address, type Hex } from 'viem';
+import { createPublicClient, fallback, getAddress, http, parseAbi, type Address, type Hex } from 'viem';
 import type { Pool } from '@odin/db';
 import { sanitizeName, sanitizeSymbol } from '@odin/shared';
 
@@ -27,7 +27,7 @@ const erc20 = parseAbi([
   'function symbol() view returns (string)',
   'function name() view returns (string)',
   'function paused() view returns (bool)',
-  'function isBlocked(address) view returns (bool)',
+  'function tokenPaused() view returns (bool)',
 ]);
 
 export class ViemDiscoveryChain implements DiscoveryChain {
@@ -66,17 +66,17 @@ export class ViemDiscoveryChain implements DiscoveryChain {
       { address: t, abi: erc20, functionName: 'symbol' as const },
       { address: t, abi: erc20, functionName: 'name' as const },
       { address: t, abi: erc20, functionName: 'paused' as const },
-      { address: t, abi: erc20, functionName: 'isBlocked' as const, args: [zeroAddress] as const },
+      { address: t, abi: erc20, functionName: 'tokenPaused' as const },
     ]);
     // mixed return types across the five calls: read results untyped and narrow per field below
     const r = (await this.c.multicall({ multicallAddress: MULTICALL3, allowFailure: true, batchSize: 16_384, contracts: calls } as never)) as { status: 'success' | 'failure'; result?: unknown }[];
     return tokens.map((_, i) => {
-      const [dec, sym, nam, paused, blocked] = r.slice(i * 5, i * 5 + 5);
+      const [dec, sym, nam, paused, tokenPaused] = r.slice(i * 5, i * 5 + 5);
       return {
         decimals: dec?.status === 'success' ? Number(dec.result) : null,
         symbol: sym?.status === 'success' ? sym.result : '',
         name: nam?.status === 'success' ? nam.result : '',
-        stock: paused?.status === 'success' && blocked?.status === 'success',
+        stock: paused?.status === 'success' && tokenPaused?.status === 'success',
       };
     });
   }

@@ -174,7 +174,6 @@ export class RiskEngine {
     for (const t of decoded.tokens) {
       if (!ctx.stockTokens.has(t)) continue;
       if (await this.d.chain.isPaused(t)) throw new CheckFailed(1, 'token_paused', `stock token ${t} is paused`);
-      if (await this.d.chain.isBlocked(t, ctx.wallet)) throw new CheckFailed(1, 'wallet_blocked', `wallet is blocked by ${t}`);
     }
     return { sellRoute, path, tokenIn, tokenOut };
   }

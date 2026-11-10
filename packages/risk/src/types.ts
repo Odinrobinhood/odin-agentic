@@ -44,7 +44,7 @@ export type AgentRiskContext = {
   wallet: Address;
   quoteAsset: Address;
   assets: Set<Address>;
-  /** Stock Tokens among the assets, held tokens and quote asset; these get paused()/isBlocked() checks. */
+  /** Stock Tokens among the assets, held tokens and quote asset; these get paused()/tokenPaused() checks. */
   stockTokens: Set<Address>;
   /**
    * Tokens with an open position (qty > 0) per mode, the quote asset excluded. A guard or user exit

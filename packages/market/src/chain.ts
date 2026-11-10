@@ -7,7 +7,7 @@ export type TokenMeta = { decimals: number; symbol: unknown; name: unknown };
 /** Chain reads Market Data needs. Everything is a read; nothing here can sign. */
 export interface MarketChain {
   tokenMeta(token: Address): Promise<TokenMeta>;
-  /** True when the token exposes the Stock Token controls (paused() and isBlocked(address)). */
+  /** True when the token exposes the Robinhood Stock Token controls (paused() and tokenPaused()). */
   hasStockControls(token: Address): Promise<boolean>;
   /** Pool from the pinned factory with its live state, or null if none exists. */
   pool(a: Address, b: Address, fee: FeeTier): Promise<PoolState | null>;
@@ -17,7 +17,7 @@ export interface MarketChain {
 
 const erc20Abi = parseAbi(['function decimals() view returns (uint8)', 'function symbol() view returns (string)', 'function name() view returns (string)']);
 const bytes32Abi = parseAbi(['function symbol() view returns (bytes32)', 'function name() view returns (bytes32)']);
-const stockAbi = parseAbi(['function paused() view returns (bool)', 'function isBlocked(address) view returns (bool)']);
+const stockAbi = parseAbi(['function paused() view returns (bool)', 'function tokenPaused() view returns (bool)']);
 const factoryAbi = parseAbi(['function getPool(address,address,uint24) view returns (address)']);
 const poolAbi = parseAbi([
   'function liquidity() view returns (uint128)',
@@ -59,7 +59,7 @@ export class ViemMarketChain implements MarketChain {
   async hasStockControls(token: Address): Promise<boolean> {
     try {
       await this.c.readContract({ address: token, abi: stockAbi, functionName: 'paused' });
-      await this.c.readContract({ address: token, abi: stockAbi, functionName: 'isBlocked', args: [zeroAddress] });
+      await this.c.readContract({ address: token, abi: stockAbi, functionName: 'tokenPaused' });
       return true;
     } catch {
       return false;

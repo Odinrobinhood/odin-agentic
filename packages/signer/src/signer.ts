@@ -200,7 +200,6 @@ export class Signer {
     for (const t of tokens) {
       if (!p.stockTokens.has(t)) continue;
       if (await this.read(() => this.d.chain.isPaused(t))) throw new Rejection('token_paused', `stock token ${t} is paused`);
-      if (await this.read(() => this.d.chain.isBlocked(t, p.wallet))) throw new Rejection('wallet_blocked', `wallet is blocked by ${t}`);
     }
     return path;
   }

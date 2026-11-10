@@ -29,6 +29,6 @@ export interface RiskChain {
   quoteExactInput(path: Hex, amountIn: bigint): Promise<bigint>;
   /** Oracle price, whole quote units per whole token, or null when no (fresh) feed covers the pair. */
   refereePrice(token: Address, quote: Address): Promise<number | null>;
+  /** Robinhood Stock Tokens: paused() or tokenPaused() (verified on-chain 2026-11-10; there is no per-wallet blocklist). */
   isPaused(token: Address): Promise<boolean>;
-  isBlocked(token: Address, wallet: Address): Promise<boolean>;
 }

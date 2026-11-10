@@ -141,7 +141,7 @@
 
 ### 3.7 Risk Engine (pre-trade)
 Checks in order; all must pass:
-1. The token is in the agent's `assets` and has a route on Robinhood Chain. For Stock Tokens: `paused()` = false and the wallet is not `isBlocked`.
+1. The token is in the agent's `assets` and has a route on Robinhood Chain. For Stock Tokens: `paused()` and `tokenPaused()` are both false.
 2. Size ≤ available balance (after gas reserve).
 3. User limits **that the user has enabled** (all optional, empty by default): max position per token, max total exposure, max trades per day, max daily loss.
 4. Maximum slippage (user-set) → `amountOutMinimum`.
@@ -314,7 +314,7 @@ Scheduler ──tick(agent)──▶ Agent Runtime
 | Testnet | Uniswap v3 is **not** deployed on testnet `46630` (router and factory have no code there). Staging therefore runs the read/sign path against mainnet with an unfunded staging seed; nothing is broadcast. See §11.6 |
 | RPC | At least 2–4 endpoints, ordered fallback; preflight both `eth_chainId` **and** `eth_call` (some providers answer the first but reject the second) |
 | Router | `SwapRouter02` — address pinned in signer config; verify `factory()` matches the pools' factory at signer startup and refuse to start on mismatch |
-| Stock Tokens | Beacon proxy; monitor `implementation()` periodically. Check `paused()` & `isBlocked(address)` on every signature |
+| Stock Tokens | Beacon proxy; monitor `implementation()` periodically. Beacon proxies of `0xe10b6f6b275de231345c20d14ab812db62151b00` (verified 2026-11-10); check `paused()` and `tokenPaused()` on every signature. There is no per-wallet blocklist function on the token |
 | Other ERC-20 tokens | Amounts are computed from actual post-swap balances (read from `Transfer` logs), not from the quote, so fee-on-transfer/rebasing tokens are recorded correctly |
 | Fee tiers | Read per pool; realizable price = pool price ± one-side fee |
 | Block time | ~0.1 seconds — confirmations and scan windows are counted in blocks accordingly, not by other chains' conventions |

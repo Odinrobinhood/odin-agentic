@@ -5,8 +5,8 @@ export interface ChainReader {
   routerFactory(router: Address): Promise<Address>;
   /** Pool from the pinned factory, or null if none exists / it holds no liquidity. */
   liquidPool(factory: Address, a: Address, b: Address, fee: number): Promise<Address | null>;
+  /** Robinhood Stock Tokens: paused() or tokenPaused() (verified on-chain 2026-11-10; there is no per-wallet blocklist). */
   isPaused(token: Address): Promise<boolean>;
-  isBlocked(token: Address, wallet: Address): Promise<boolean>;
   /** EIP-191 signature check for EOAs and ERC-1271 smart wallets. */
   verifyMessage(address: Address, message: string, signature: Hex): Promise<boolean>;
 }
@@ -14,7 +14,7 @@ export interface ChainReader {
 const factoryAbi = parseAbi(['function getPool(address,address,uint24) view returns (address)']);
 const poolAbi = parseAbi(['function liquidity() view returns (uint128)']);
 const routerAbi = parseAbi(['function factory() view returns (address)']);
-const stockAbi = parseAbi(['function paused() view returns (bool)', 'function isBlocked(address) view returns (bool)']);
+const stockAbi = parseAbi(['function paused() view returns (bool)', 'function tokenPaused() view returns (bool)']);
 
 export class ViemChainReader implements ChainReader {
   private readonly client;
@@ -40,12 +40,12 @@ export class ViemChainReader implements ChainReader {
     return liq > 0n ? getAddress(pool) : null;
   }
 
-  isPaused(token: Address): Promise<boolean> {
-    return this.client.readContract({ address: token, abi: stockAbi, functionName: 'paused' });
-  }
-
-  isBlocked(token: Address, wallet: Address): Promise<boolean> {
-    return this.client.readContract({ address: token, abi: stockAbi, functionName: 'isBlocked', args: [wallet] });
+  async isPaused(token: Address): Promise<boolean> {
+    const [paused, tokenPaused] = await Promise.all([
+      this.client.readContract({ address: token, abi: stockAbi, functionName: 'paused' }),
+      this.client.readContract({ address: token, abi: stockAbi, functionName: 'tokenPaused' }),
+    ]);
+    return paused || tokenPaused;
   }
 
   verifyMessage(address: Address, message: string, signature: Hex): Promise<boolean> {

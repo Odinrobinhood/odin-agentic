@@ -51,7 +51,6 @@ class FakeChain implements RiskChain {
   ]);
   referee = new Map<Address, number | null>();
   paused = new Set<Address>();
-  blocked = new Set<Address>();
   fail = false;
   midCalls = 0;
   decimals = new Map<Address, number>([
@@ -83,9 +82,6 @@ class FakeChain implements RiskChain {
   }
   async isPaused(t: Address) {
     return this.paused.has(t);
-  }
-  async isBlocked(t: Address) {
-    return this.blocked.has(t);
   }
 }
 
@@ -277,12 +273,10 @@ describe('check 1 — token & route', () => {
     expect(rejected(await engine.evaluate(buy('1'))).code).toBe('internal_error');
   });
 
-  it('checks paused / blocked stock tokens', async () => {
+  it('checks the pause state of stock tokens (paused() or tokenPaused())', async () => {
     chain.paused.add(TSLA);
     expect(rejected(await engine.evaluate(sell({ type: 'fraction_of_position', value: '1' }, { origin: 'guard' }))).code).toBe('token_paused');
-    chain.paused.clear();
-    chain.blocked.add(TSLA);
-    expect(rejected(await engine.evaluate(buy('1'))).code).toBe('wallet_blocked');
+    expect(rejected(await engine.evaluate(buy('1'))).code).toBe('token_paused');
   });
 });
 

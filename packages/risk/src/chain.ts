@@ -14,7 +14,7 @@ const feedAbi = parseAbi([
   'function decimals() view returns (uint8)',
   'function latestRoundData() view returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)',
 ]);
-const stockAbi = parseAbi(['function paused() view returns (bool)', 'function isBlocked(address) view returns (bool)']);
+const stockAbi = parseAbi(['function paused() view returns (bool)', 'function tokenPaused() view returns (bool)']);
 const erc20Abi = parseAbi(['function balanceOf(address) view returns (uint256)']);
 
 /** USD reference for a token: a Chainlink feed, or a fixed value (e.g. a USD stablecoin used as quote). */
@@ -73,13 +73,15 @@ export class ViemRiskChain implements RiskChain {
     return t / q;
   }
 
-  isPaused(token: Address): Promise<boolean> {
-    return this.c.readContract({ address: token, abi: stockAbi, functionName: 'paused' });
+  async isPaused(token: Address): Promise<boolean> {
+    const [paused, tokenPaused] = await Promise.all([
+      this.c.readContract({ address: token, abi: stockAbi, functionName: 'paused' }),
+      this.c.readContract({ address: token, abi: stockAbi, functionName: 'tokenPaused' }),
+    ]);
+    return paused || tokenPaused;
   }
 
-  isBlocked(token: Address, wallet: Address): Promise<boolean> {
-    return this.c.readContract({ address: token, abi: stockAbi, functionName: 'isBlocked', args: [wallet] });
-  }
+
 
   /** USD price from the configured source; null when absent, non-positive or stale (the referee is then skipped). */
   private async usd(token: Address): Promise<number | null> {

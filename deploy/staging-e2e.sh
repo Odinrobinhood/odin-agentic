@@ -64,6 +64,19 @@ echo "-- guard sell WETH to USDG (should sign):"
 post "$GT" 7402 "{\"agentId\":\"$AGENT\",\"swap\":{\"path\":\"$SELL\",\"amountIn\":\"1000\"},\"amountOutMin\":\"1\",$GAS}" /v1/swap | jq -c '{txHash, to, error}'
 echo "-- agent token on guard port (unauthorized):"
 post "$AT" 7402 '{}' /v1/swap | jq -c .error
+echo "-- real Robinhood Stock Token (NVDA): registry flags it, signer runs paused()/tokenPaused() and signs a buy"
+NVDA=$(psql_su -d odin -c "SELECT address FROM token_catalog WHERE upper(symbol) = 'NVDA' AND error IS NULL ORDER BY depth_usdg DESC NULLS LAST LIMIT 1")
+if [ -n "$NVDA" ]; then
+  (cd "$APP" && sudo -u odin env $(grep -v '^#' /etc/odin/chain.env | xargs) node packages/market/scripts/add-token.ts "$NVDA" | jq -c '{symbol: .token.symbol, stock: .token.isStockToken, routes: [.routes[].quote]}')
+  psql_su -d odin -c "INSERT INTO agent_assets (agent_id, token_address) VALUES ('$AGENT', '$NVDA') ON CONFLICT DO NOTHING" >/dev/null
+  NBUY=$(psql_su -d odin -c "SELECT path FROM routes WHERE token_address = '$NVDA' AND quote_address = '$USDG'")
+  # routes are stored token -> quote (sell); reverse the hops for the buy
+  NBUY=$(node -e 'const h=process.argv[1].slice(2);const t=[],f=[];let i=0;for(;;){t.push(h.slice(i,i+40));i+=40;if(i>=h.length)break;f.push(h.slice(i,i+6));i+=6}console.log("0x"+t.reverse().map((x,k)=>x+(f.slice().reverse()[k]??"")).join(""))' "$NBUY")
+  post "$AT" 7401 "{\"agentId\":\"$AGENT\",\"swap\":{\"path\":\"$NBUY\",\"amountIn\":\"1000000\"},\"amountOutMin\":\"1\",$GAS}" /v1/swap | jq -c '{txHash, to, error}'
+  psql_su -d odin -c "DELETE FROM agent_assets WHERE agent_id = '$AGENT' AND token_address = '$NVDA'" >/dev/null
+else
+  echo "NVDA not in the catalog yet"
+fi
 echo "-- ledger rows:"
 psql_su -d odin -c "SELECT channel, kind, count(*) FROM signer_signatures WHERE agent_id='$AGENT' GROUP BY 1,2 ORDER BY 1,2"
 echo "-- signer DB role cannot write policy tables:"

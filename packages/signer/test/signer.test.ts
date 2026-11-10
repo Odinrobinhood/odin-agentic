@@ -33,7 +33,6 @@ const erc20Abi = parseAbi(['function approve(address spender, uint256 amount) re
 class FakeChain implements ChainReader {
   pools = new Set<string>();
   paused = new Set<Address>();
-  blocked = new Set<Address>();
   failReads = false;
   key(x: Address, y: Address, fee: number) {
     return [x, y].sort().join('-') + `-${fee}`;
@@ -53,9 +52,6 @@ class FakeChain implements ChainReader {
   }
   async isPaused(t: Address) {
     return this.paused.has(t);
-  }
-  async isBlocked(t: Address) {
-    return this.blocked.has(t);
   }
   async verifyMessage(address: Address, message: string, signature: Hex) {
     return verifyMessage({ address, message, signature });
@@ -207,12 +203,11 @@ describe('swap', () => {
     await rejects(signer.swap(swapReq(encodePath([USDG, TSLA], [3000])), 'agent'), 'no_pool');
   });
 
-  it('checks paused() and isBlocked() of stock tokens on every signature', async () => {
+  it('checks the pause state of stock tokens on every signature', async () => {
     chain.paused.add(TSLA);
     await rejects(signer.swap(swapReq(buyTsla), 'agent'), 'token_paused');
     chain.paused.clear();
-    chain.blocked.add(TSLA);
-    await rejects(signer.swap(swapReq(buyTsla), 'agent'), 'wallet_blocked');
+    await expect(signer.swap(swapReq(buyTsla), 'agent')).resolves.toBeTruthy();
   });
 
   it('fails closed when chain reads fail', async () => {
@@ -282,7 +277,7 @@ describe('agent status and channels', () => {
     // buying it back, or selling it into something other than the quote asset, is still refused
     await rejects(signer.swap(swapReq(encodePath([USDG, OTHER], [500])), 'agent'), 'token_not_allowed');
     await rejects(signer.swap(swapReq(encodePath([OTHER, WETH], [500])), 'agent'), 'token_not_allowed');
-    // held stock tokens keep their paused()/isBlocked() checks
+    // held stock tokens keep their pause checks
     chain.paused.add(OTHER);
     await rejects(signer.swap(swapReq(exit, { gasParams: { ...gas, nonce: 10 } }), 'guard'), 'token_paused');
   });
