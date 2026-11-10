@@ -12,7 +12,7 @@ await pool.query(`DELETE FROM watchdog_state WHERE key = $1`, [`low_gas:${agentI
 const prev = (await pool.query<{ mode: string }>('SELECT mode FROM agents WHERE id = $1', [agentId])).rows[0]!.mode;
 await pool.query(`UPDATE agents SET mode = 'live' WHERE id = $1`, [agentId]);
 try {
-  const w = new Watchdog({ data: new PgWatchdogData(pool, process.env.CHAIN_RPC_URLS!.split(',')), sink: new PgAlertSink(pool) });
+  const w = new Watchdog({ data: new PgWatchdogData(pool, process.env.CHAIN_RPC_URLS!.split(','), process.env.WATCHDOG_SERVICES?.split(',')), sink: new PgAlertSink(pool) });
   const first = await w.runOnce();
   console.log('-- findings:', JSON.stringify(first.map((f) => ({ event: f.event, sent: f.sent, operator: f.operator }))));
   const again = await w.runOnce();

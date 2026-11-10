@@ -117,7 +117,7 @@ sleep 3
 (cd "$APP/apps/web" && sudo -u odin node scripts/staging-web.mjs)
 
 echo "== watchdog (real data; staging agent briefly live so low gas must fire)"
-(cd "$APP" && sudo -u odin env $(grep -v '^#' /etc/odin/chain.env | xargs) STAGING_AGENT_ID="$AGENT" node packages/watchdog/scripts/staging-watchdog.ts)
+(cd "$APP" && sudo -u odin env $(grep -hv '^#' /etc/odin/chain.env /etc/odin/watchdog.env | xargs) STAGING_AGENT_ID="$AGENT" node packages/watchdog/scripts/staging-watchdog.ts)
 
 echo "== backup + restore test"
 systemctl start odin-backup.service && journalctl -u odin-backup --no-pager -n 1 -o cat
