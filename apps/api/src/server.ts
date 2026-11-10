@@ -32,6 +32,12 @@ type Authed = FastifyRequest & { user: { userId: string; address: Address; famil
 
 const STATUS: Partial<Record<RejectionCode, number>> = { unauthorized: 401, bad_request: 400, unknown_agent: 404, rate_limited: 429 };
 
+/** Query `limit`: integer in [1, 500], else the default (never NaN into SQL). */
+function lim(raw: unknown, def: number): number {
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 1 ? Math.min(n, 500) : def;
+}
+
 function parse<S extends ZodTypeAny>(schema: S, body: unknown): z.infer<S> {
   const r = schema.safeParse(body ?? {});
   if (!r.success) throw new Rejection('bad_request', r.error.issues.map((i) => `${i.path.join('.') || 'body'}: ${i.message}`).join('; '));
@@ -146,9 +152,9 @@ export function buildServer(d: ApiDeps): FastifyInstance {
     await d.agents.fundPaper(uid(req), aid(req), parse(PaperFundInput, req.body).amount, d.setPaperBalance);
     return { ok: true };
   });
-  app.get('/v1/agents/:id/decisions', { preHandler: authed }, async (req) => json(await d.agents.decisions(uid(req), aid(req), Number((req.query as { limit?: string }).limit ?? 50))));
+  app.get('/v1/agents/:id/decisions', { preHandler: authed }, async (req) => json(await d.agents.decisions(uid(req), aid(req), lim((req.query as { limit?: string }).limit, 50))));
   app.get('/v1/agents/:id/positions', { preHandler: authed }, async (req) => json(await d.agents.positions(uid(req), aid(req))));
-  app.get('/v1/agents/:id/executions', { preHandler: authed }, async (req) => json(await d.agents.executions(uid(req), aid(req), Number((req.query as { limit?: string }).limit ?? 50))));
+  app.get('/v1/agents/:id/executions', { preHandler: authed }, async (req) => json(await d.agents.executions(uid(req), aid(req), lim((req.query as { limit?: string }).limit, 50))));
 
   // ── backtests (architecture §3.4) ─────────────────────────────────────────────
   app.post('/v1/agents/:id/backtests', { preHandler: authed }, async (req) => {
@@ -179,7 +185,7 @@ export function buildServer(d: ApiDeps): FastifyInstance {
   app.get('/v1/signals/profiles', { preHandler: authed }, async (req) => json(await d.alerts.profiles(uid(req))));
   app.post('/v1/signals/profiles', { preHandler: authed }, async (req) => d.alerts.saveProfile(uid(req), parse(ProfileInput, req.body)));
   app.put('/v1/signals/profiles/:pid', { preHandler: authed }, async (req) => d.alerts.saveProfile(uid(req), parse(ProfileInput, req.body), pid(req)));
-  app.get('/v1/signals', { preHandler: authed }, async (req) => json(await d.alerts.signals(uid(req), Number((req.query as { limit?: string }).limit ?? 50))));
+  app.get('/v1/signals', { preHandler: authed }, async (req) => json(await d.alerts.signals(uid(req), lim((req.query as { limit?: string }).limit, 50))));
 
   // ── analyst (architecture §3.13): read-only, answers only from on-chain tools ───────────────────────
   const conv = async (req: FastifyRequest) => {
@@ -197,7 +203,9 @@ export function buildServer(d: ApiDeps): FastifyInstance {
     try {
       a = await d.analyst.engine.ask(uid(req), id, await d.analyst.store.history(id), content);
     } catch (e) {
-      throw new Rejection('llm_unavailable', (e as Error).message.split('\n')[0] ?? 'analyst unavailable');
+      // provider error text is logged, not returned to the client
+      console.error(JSON.stringify({ msg: 'analyst error', error: (e as Error).message.split('\n')[0] }));
+      throw new Rejection('llm_unavailable', 'the AI analyst is temporarily unavailable');
     }
     await d.analyst.store.append(id, content, a);
     return json(a);
@@ -206,7 +214,7 @@ export function buildServer(d: ApiDeps): FastifyInstance {
   // ── token catalog: every token with a pool on Robinhood Chain, searchable; the user decides what to trade ──
   app.get('/v1/tokens', { preHandler: authed }, async (req) => {
     const q = req.query as { q?: string; limit?: string };
-    return json(await searchCatalog(d.pool as never, String(q.q ?? '').slice(0, 64), Number(q.limit ?? 25)));
+    return json(await searchCatalog(d.pool as never, String(q.q ?? '').slice(0, 64), lim(q.limit, 25)));
   });
 
   // ── portfolio (architecture §3.15): SIWE + agent wallets automatically, plus watch-only addresses ────
@@ -232,7 +240,7 @@ export function buildServer(d: ApiDeps): FastifyInstance {
   });
 
   // ── notifications (architecture §3.11) ───────────────────────────────────────
-  app.get('/v1/notifications', { preHandler: authed }, async (req) => json(await d.notifications.feed(uid(req), Number((req.query as { limit?: string }).limit ?? 50))));
+  app.get('/v1/notifications', { preHandler: authed }, async (req) => json(await d.notifications.feed(uid(req), lim((req.query as { limit?: string }).limit, 50))));
   app.get('/v1/notifications/channels', { preHandler: authed }, async (req) => d.notifications.channels(uid(req)));
   app.put('/v1/notifications/channels', { preHandler: authed }, async (req) => d.notifications.setChannels(uid(req), parse(ChannelsInput, req.body)));
   app.post('/v1/notifications/test', { preHandler: authed }, async (req) => d.notifications.test(uid(req)));

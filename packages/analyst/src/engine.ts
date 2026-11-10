@@ -19,6 +19,8 @@ export interface AnalystLLM {
 export type AskResult = { answer: string; model: string; toolCalls: { name: string; input: unknown; ok: boolean }[]; asOfBlock: string | null; tokensUsed: number; refused?: boolean };
 
 const MAX_STEPS = 8;
+/** Prior turns sent with a question (older ones are dropped, bounding input size per call). */
+const MAX_HISTORY_TURNS = 20;
 
 export class AnalystEngine {
   private readonly llm: AnalystLLM;
@@ -33,24 +35,45 @@ export class AnalystEngine {
     this.cfg = deps.config;
   }
 
+  /** Users with a question in flight: one at a time per user, so parallel requests cannot all pass the budget check. */
+  private readonly busy = new Set<string>();
+
   async ask(userId: string, conversationId: string, history: ChatTurn[], question: string): Promise<AskResult> {
-    const day = new Date().toISOString().slice(0, 10);
-    if ((await this.meter.usedToday(userId, day)) >= this.cfg.dailyTokenBudget) {
-      return { answer: 'Your daily AI usage limit is reached; the analyst is available again tomorrow (UTC).', model: this.cfg.model, toolCalls: [], asOfBlock: null, tokensUsed: 0, refused: true };
+    if (this.busy.has(userId)) {
+      return { answer: 'Another question is still being answered; please wait for it to finish.', model: this.cfg.model, toolCalls: [], asOfBlock: null, tokensUsed: 0, refused: true };
     }
+    this.busy.add(userId);
+    try {
+      return await this.askOne(userId, conversationId, history.slice(-MAX_HISTORY_TURNS), question);
+    } finally {
+      this.busy.delete(userId);
+    }
+  }
+
+  private async askOne(userId: string, conversationId: string, history: ChatTurn[], question: string): Promise<AskResult> {
+    const day = new Date().toISOString().slice(0, 10);
+    const exhausted = async () => (await this.meter.usedToday(userId, day)) >= this.cfg.dailyTokenBudget;
+    const limitReached = { answer: 'Your daily AI usage limit is reached; the analyst is available again tomorrow (UTC).', model: this.cfg.model, toolCalls: [], asOfBlock: null, tokensUsed: 0, refused: true };
+    if (await exhausted()) return limitReached;
     const tools = TOOL_DEFS.map((t) => ({ ...t, strict: true })) as unknown as Anthropic.Beta.BetaTool[];
     // conversation is append-only: prior turns as plain text, then this turn's tool loop
     const messages: Anthropic.Beta.BetaMessageParam[] = [...history.map((h) => ({ role: h.role, content: h.content })), { role: 'user', content: question }];
     const toolCalls: AskResult['toolCalls'] = [];
     let asOfBlock: string | null = null;
     let tokens = 0;
+    let metered = 0;
     let model = this.cfg.model;
 
     try {
       for (let step = 0; step < MAX_STEPS; step++) {
+        // metered per call and re-checked before the next one: the overshoot is at most one call
+        if (step > 0 && (await exhausted())) return { ...limitReached, model, toolCalls, asOfBlock, tokensUsed: tokens };
         const res = await this.llm.call({ model: this.cfg.model, system: ANALYST_SYSTEM, messages, tools });
         model = res.model;
-        tokens += (res.usage.input_tokens ?? 0) + (res.usage.output_tokens ?? 0) + (res.usage.cache_read_input_tokens ?? 0) + (res.usage.cache_creation_input_tokens ?? 0);
+        const used = (res.usage.input_tokens ?? 0) + (res.usage.output_tokens ?? 0) + (res.usage.cache_read_input_tokens ?? 0) + (res.usage.cache_creation_input_tokens ?? 0);
+        tokens += used;
+        metered += used;
+        await this.meter.add(userId, 'analyst', conversationId, day, used);
         if (res.stop_reason === 'refusal') return { answer: 'The model declined to answer this question.', model, toolCalls, asOfBlock, tokensUsed: tokens, refused: true };
         const uses = res.content.filter((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === 'tool_use');
         if (res.stop_reason !== 'tool_use' || uses.length === 0) {
@@ -77,7 +100,7 @@ export class AnalystEngine {
       }
       return { answer: 'The analysis needed too many steps; please ask a narrower question.', model, toolCalls, asOfBlock, tokensUsed: tokens };
     } finally {
-      if (tokens > 0) await this.meter.add(userId, 'analyst', conversationId, day, tokens);
+      if (tokens > metered) await this.meter.add(userId, 'analyst', conversationId, day, tokens - metered);
     }
   }
 }

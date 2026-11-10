@@ -54,7 +54,13 @@ export class FundsService {
       [agentId, token?.toLowerCase() ?? null, amount.toString(), w.rows[0].owner],
     );
     const id = row.rows[0]!.id;
-    const out = await this.d.executor.executeWithdraw({ agentId, wallet: getAddress(w.rows[0].address), token, amount });
+    let out: Awaited<ReturnType<WithdrawExecutor['executeWithdraw']>>;
+    try {
+      out = await this.d.executor.executeWithdraw({ agentId, wallet: getAddress(w.rows[0].address), token, amount });
+    } catch (e) {
+      // never leave the row pending forever
+      out = { status: 'rejected', code: e instanceof Rejection ? e.code : 'internal_error', message: (e as Error).message.split('\n')[0] };
+    }
     const status = out.status === 'confirmed' || out.status === 'reverted' || out.status === 'dropped' ? out.status : 'rejected';
     await this.d.pool.query(
       `UPDATE withdrawals SET status = $2, tx_hash = $3, error_code = $4, error = $5, updated_at = now() WHERE id = $1`,
@@ -84,6 +90,12 @@ export class FundsService {
 
   async closeAll(agentId: string, status: string, agentMode: string, mode?: 'paper' | 'live') {
     if (status !== 'active' && status !== 'paused') throw new Rejection('bad_request', `cannot close positions of a ${status} agent; withdraw the tokens instead`);
+    // one open request per agent and mode: repeated clicks return the pending one instead of queueing more
+    const open = await this.d.pool.query<{ id: string; status: string }>(
+      `SELECT id, status FROM close_requests WHERE agent_id = $1 AND mode = $2 AND status IN ('pending', 'processing') LIMIT 1`,
+      [agentId, mode ?? agentMode],
+    );
+    if (open.rows[0]) return { requestId: open.rows[0].id, status: open.rows[0].status };
     const r = await this.d.pool.query<{ id: string }>(`INSERT INTO close_requests (agent_id, mode) VALUES ($1, $2) RETURNING id`, [agentId, mode ?? agentMode]);
     return { requestId: r.rows[0]!.id, status: 'pending' };
   }

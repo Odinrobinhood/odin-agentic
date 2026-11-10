@@ -76,6 +76,10 @@ export class AlertService {
     if (id) {
       const own = await this.pool.query('SELECT 1 FROM signal_profiles WHERE id = $1 AND user_id = $2 LIMIT 1', [uuid(id), userId]);
       if (!own.rowCount) throw new Rejection('bad_request', 'unknown profile');
+    } else {
+      // each profile runs the model on its own schedule: bound how many one user can create
+      const n = await this.pool.query<{ n: number }>('SELECT count(DISTINCT id)::int AS n FROM signal_profiles WHERE user_id = $1', [userId]);
+      if (n.rows[0]!.n >= 20) throw new Rejection('bad_request', 'at most 20 AI signal profiles per user');
     }
     const r = await this.pool.query<{ id: string; version: number }>(
       `INSERT INTO signal_profiles (id, user_id, version, system_prompt, model_provider, model_name, tokens, cadence_seconds, channels, enabled)
