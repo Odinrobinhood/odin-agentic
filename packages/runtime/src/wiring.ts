@@ -24,7 +24,7 @@ export function buildRuntime(env: NodeJS.ProcessEnv = process.env, opts: { provi
   const rpcUrls = req(env, 'CHAIN_RPC_URLS').split(',').map((s) => s.trim()).filter(Boolean);
   const usdg = getAddress(req(env, 'CHAIN_USDG'));
   const weth = getAddress(req(env, 'CHAIN_WETH'));
-  const pool = opts.pool ?? createPool(env.DATABASE_URL ?? 'postgresql://odin@/odin?host=/var/run/postgresql', { max: 10 });
+  const pool = opts.pool ?? createPool(env.DATABASE_URL ?? 'postgresql://odin@/odin?host=/var/run/postgresql', { max: Number(env.RUNTIME_DB_POOL_MAX ?? 10) });
 
   const balances = { live: new ViemBalanceReader(rpcUrls), paper: new PgPaperBalances(pool) };
   const risk = new RiskEngine({
