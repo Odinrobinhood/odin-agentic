@@ -145,7 +145,10 @@ export class CatalogEnricher {
     );
     const wethPrice = await this.pool.query<{ price: string }>('SELECT price FROM market_snapshots WHERE token_address = $1 ORDER BY ts DESC LIMIT 1', [this.weth.toLowerCase()]);
     const wethUsdg = wethPrice.rows[0] ? Number(wethPrice.rows[0].price) : null;
-    for (const { token } of due.rows) await this.enrich(getAddress(token), wethUsdg);
+    // a few at a time: fast enough for a chain-wide backfill, gentle on public RPCs
+    for (let i = 0; i < due.rows.length; i += 4) {
+      await Promise.all(due.rows.slice(i, i + 4).map(({ token }) => this.enrich(getAddress(token), wethUsdg)));
+    }
     return due.rows.length;
   }
 

@@ -22,20 +22,29 @@ const health = new Health('market', 180000).listen(HEALTH_PORTS.market);
 const discoveryChain = new ViemDiscoveryChain(cfg.rpcUrls);
 const discovery = new PoolDiscovery({ pool, chain: discoveryChain, factory: cfg.factory });
 const enricher = new CatalogEnricher({ pool, chain: discoveryChain, market: chain, usdg: cfg.usdg, weth: cfg.weth });
-void (async () => {
-  for (;;) {
-    try {
-      const d = await discovery.step();
-      if (d.found) log({ msg: 'pools discovered', found: d.found, toBlock: d.toBlock.toString() });
-      const n = await enricher.step();
-      if (n) log({ msg: 'catalog enriched', tokens: n });
-      if (d.caughtUp && n === 0) await new Promise((r) => setTimeout(r, 30_000));
-    } catch (e) {
-      log({ msg: 'catalog step failed', error: (e as Error).message.split('\n')[0] });
-      await new Promise((r) => setTimeout(r, 15_000));
+// two independent loops: discovery must not wait for metadata reads of thousands of tokens
+const background = (name: string, fn: () => Promise<boolean>) =>
+  void (async () => {
+    for (;;) {
+      try {
+        // fn returns true when there is more work right away
+        if (!(await fn())) await new Promise((r) => setTimeout(r, 30_000));
+      } catch (e) {
+        log({ msg: `${name} step failed`, error: (e as Error).message.split('\n')[0] });
+        await new Promise((r) => setTimeout(r, 10_000));
+      }
     }
-  }
-})();
+  })();
+background('pool discovery', async () => {
+  const d = await discovery.step();
+  if (d.found) log({ msg: 'pools discovered', found: d.found, toBlock: d.toBlock.toString() });
+  return !d.caughtUp;
+});
+background('catalog', async () => {
+  const n = await enricher.step(40);
+  if (n) log({ msg: 'catalog enriched', tokens: n });
+  return n > 0;
+});
 
 let lastRefresh = 0;
 for (;;) {
