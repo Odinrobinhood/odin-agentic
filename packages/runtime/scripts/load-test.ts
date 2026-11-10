@@ -10,6 +10,7 @@
  *      LOAD_CONCURRENCY (8 per worker, same as RUNTIME_CONCURRENCY), LOAD_LLM_MS (6000 mean model latency),
  *      LOAD_TRADE_PCT (25: share of decisions that buy or sell), LOAD_ASSETS (comma-separated token addresses)
  */
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 import { cpus, loadavg } from 'node:os';
 import type { DecisionProvider } from '@odin/decision';
@@ -27,12 +28,17 @@ if (!ASSETS.length) throw new Error('LOAD_ASSETS is required');
 
 // model latency: log-normal around LLM_MS (thinking models have a long tail)
 const latency = () => Math.min(LLM_MS * 5, Math.exp(Math.log(LLM_MS) - 0.18 + 0.6 * Math.sqrt(-2 * Math.log(Math.random() || 1e-9)) * Math.cos(2 * Math.PI * Math.random())));
+/** model time spent inside the current tick, so the platform's own time can be reported separately */
+const llmTime = new AsyncLocalStorage<{ ms: number }>();
 const thesis = { claim: 'load test', horizon_ticks: 3, invalidated_if: 'n/a' };
 const scripted: DecisionProvider = {
   name: 'scripted-load',
   supports: () => true,
   complete: async (req) => {
-    await new Promise((r) => setTimeout(r, latency()));
+    const wait = latency();
+    await new Promise((r) => setTimeout(r, wait));
+    const acc = llmTime.getStore();
+    if (acc) acc.ms += wait;
     const roll = Math.random() * 100;
     const token = ASSETS[Math.floor(Math.random() * ASSETS.length)]!;
     const d =
@@ -40,7 +46,7 @@ const scripted: DecisionProvider = {
         ? { action: 'buy', token, size: { type: 'quote_amount', value: '10' }, rationale: 'load buy', thesis, confidence: 0.5 }
         : roll < TRADE_PCT
           ? { action: 'sell', token, size: { type: 'fraction_of_position', value: '0.5' }, rationale: 'load sell', thesis, confidence: 0.5 }
-          : { action: 'hold', rationale: 'load hold', thesis, confidence: 0.5 };
+          : { action: 'hold', token: null, size: null, rationale: 'load hold', thesis, confidence: 0.5 };
     return { text: JSON.stringify(d), stopReason: 'end_turn', model: req.model, tokensUsed: 3000 };
   },
 };
@@ -76,7 +82,7 @@ await new PgSchedule(pool).enroll();
 await pool.query("UPDATE agent_schedule SET next_tick_at = now() + make_interval(secs => random() * 60)");
 
 // ── run W scheduler loops (the production loop from src/main.ts) ─────────────────────────────────────
-const ticks: { ms: number; lagMs: number; outcome: string; code?: string; error?: string }[] = [];
+const ticks: { ms: number; llmMs: number; lagMs: number; outcome: string; code?: string; error?: string }[] = [];
 const lagSamples: { t: number; overdue: number; maxLagS: number }[] = [];
 const started = Date.now();
 const until = started + SECONDS * 1000;
@@ -94,12 +100,13 @@ async function worker(w: number) {
         const t0 = Date.now();
         const lag = await pool.query<{ lag: number }>('SELECT extract(epoch FROM now() - next_tick_at) * 1000 AS lag FROM agent_schedule WHERE agent_id = $1', [agentId]);
         let error: string | undefined;
+        const acc = { ms: 0 };
         try {
-          const r = await runTick(deps, agentId);
-          ticks.push({ ms: Date.now() - t0, lagMs: Number(lag.rows[0]?.lag ?? 0), outcome: r.outcome, ...('code' in r && r.code ? { code: r.code } : {}) });
+          const r = await llmTime.run(acc, () => runTick(deps, agentId));
+          ticks.push({ ms: Date.now() - t0, llmMs: acc.ms, lagMs: Number(lag.rows[0]?.lag ?? 0), outcome: r.outcome, ...('code' in r && r.code ? { code: r.code } : {}) });
         } catch (e) {
           error = (e as Error).message.split('\n')[0]!.slice(0, 160);
-          ticks.push({ ms: Date.now() - t0, lagMs: Number(lag.rows[0]?.lag ?? 0), outcome: 'error', error });
+          ticks.push({ ms: Date.now() - t0, llmMs: acc.ms, lagMs: Number(lag.rows[0]?.lag ?? 0), outcome: 'error', error });
         } finally {
           await schedule.complete(agentId, owner, { error }).catch(() => {});
         }
@@ -140,7 +147,8 @@ const report = {
   required: { ticksPerMin: N, capacityEstimatePerMin: Math.round((WORKERS * CONCURRENCY * 60_000) / (LLM_MS + 400)) },
   achieved: { ticks: ticks.length, ticksPerMin: Math.round((ticks.length / elapsedS) * 60) },
   tickMs: { p50: pct(ticks.map((t) => t.ms), 50), p95: pct(ticks.map((t) => t.ms), 95), p99: pct(ticks.map((t) => t.ms), 99), max: pct(ticks.map((t) => t.ms), 100) },
-  nonLlmMsP50: Math.max(0, pct(ticks.map((t) => t.ms), 50) - LLM_MS),
+  platformMs: { p50: Math.round(pct(ticks.map((t) => t.ms - t.llmMs), 50)), p95: Math.round(pct(ticks.map((t) => t.ms - t.llmMs), 95)), max: Math.round(pct(ticks.map((t) => t.ms - t.llmMs), 100)) },
+  byOutcomePlatformMsP50: Object.fromEntries([...new Set(ticks.map((t) => t.outcome))].map((o) => [o, Math.round(pct(ticks.filter((t) => t.outcome === o).map((t) => t.ms - t.llmMs), 50))])),
   startLagS: { p50: Math.round(pct(ticks.map((t) => t.lagMs), 50) / 1000), p95: Math.round(pct(ticks.map((t) => t.lagMs), 95) / 1000), max: Math.round(pct(ticks.map((t) => t.lagMs), 100) / 1000) },
   backlogAfter2min: { overdueMax: Math.max(0, ...steady.map((s) => s.overdue)), maxLagS: Math.max(0, ...steady.map((s) => s.maxLagS)), lastLagS: lagSamples.at(-1)?.maxLagS ?? null },
   outcomes: by((t) => t.outcome),
