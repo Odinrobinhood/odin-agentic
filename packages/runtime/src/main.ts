@@ -1,3 +1,4 @@
+import { HEALTH_PORTS, Health } from '@odin/shared';
 import { hostname } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { buildRuntime } from './wiring.ts';
@@ -16,9 +17,11 @@ const LEASE_MS = 5 * 60_000; // longer than any tick: LLM call + approve + swap 
 const log = (o: object) => console.log(JSON.stringify(o));
 
 log({ msg: 'runtime up', owner, concurrency: CONCURRENCY });
+const health = new Health('runtime', 60000).listen(HEALTH_PORTS.runtime);
 const running = new Set<string>();
 
 for (;;) {
+  health.beat();
   try {
     await schedule.enroll();
     if (Date.now() - lastTriggerCheck >= 15_000) {
@@ -45,6 +48,7 @@ for (;;) {
       })();
     }
   } catch (e) {
+    health.fail((e as Error).message);
     log({ msg: 'scheduler error', error: (e as Error).message });
   }
   await new Promise((r) => setTimeout(r, 1_000));

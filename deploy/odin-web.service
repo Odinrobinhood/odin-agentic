@@ -9,6 +9,7 @@ User=odin
 Group=odin
 EnvironmentFile=/etc/odin/chain.env
 Environment=API_URL=http://127.0.0.1:7500 WEB_ORIGIN=http://localhost:3000 NEXT_TELEMETRY_DISABLED=1
+EnvironmentFile=-/etc/odin/build.env
 WorkingDirectory=/opt/odin/app/apps/web
 ExecStart=/usr/bin/node node_modules/next/dist/bin/next start -p 3000 -H 127.0.0.1
 ReadWritePaths=/opt/odin/app/apps/web/.next/cache

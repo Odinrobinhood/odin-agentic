@@ -9,6 +9,7 @@ Type=simple
 User=odin-guard
 Group=odin-guard
 EnvironmentFile=/etc/odin/chain.env
+EnvironmentFile=-/etc/odin/build.env
 WorkingDirectory=/opt/odin/app
 ExecStart=/usr/bin/node packages/guard/src/main.ts
 Restart=always

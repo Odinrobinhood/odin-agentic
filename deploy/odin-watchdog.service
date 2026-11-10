@@ -9,6 +9,8 @@ User=odin
 Group=odin
 EnvironmentFile=/etc/odin/chain.env
 
+EnvironmentFile=-/etc/odin/build.env
+EnvironmentFile=-/etc/odin/watchdog.env
 WorkingDirectory=/opt/odin/app
 ExecStart=/usr/bin/node packages/watchdog/src/main.ts
 Restart=on-failure

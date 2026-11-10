@@ -38,6 +38,10 @@ class Data implements WatchdogData {
   async snapshotAge() {
     return this.age;
   }
+  down: string[] = [];
+  async services() {
+    return ['market', 'guard'].map((name) => ({ name, ok: !this.down.includes(name), detail: this.down.includes(name) ? 'unreachable' : 'ok' }));
+  }
 }
 
 class Sink implements AlertSink {
@@ -64,10 +68,10 @@ describe('Watchdog', () => {
 
   it('sends low gas to the owner and every other condition to the operator', async () => {
     const d = new Data();
-    Object.assign(d, { balance: 10n ** 14n, drift: 2, pending: 1, overdue: 3, llm: { total: 10, failed: 6 }, lag: 9000n, age: 900 });
+    Object.assign(d, { balance: 10n ** 14n, drift: 2, pending: 1, overdue: 3, llm: { total: 10, failed: 6 }, lag: 9000n, age: 900, down: ['guard'] });
     const sink = new Sink();
     const f = await new Watchdog({ data: d, sink }).runOnce();
-    expect(f.map((x) => x.event).sort()).toEqual(['low_gas', 'ops_indexer_lag', 'ops_llm_errors', 'ops_nonce_drift', 'ops_scheduler_lag', 'ops_stale_prices', 'ops_stuck_transactions']);
+    expect(f.map((x) => x.event).sort()).toEqual(['low_gas', 'ops_indexer_lag', 'ops_llm_errors', 'ops_nonce_drift', 'ops_scheduler_lag', 'ops_service_down', 'ops_stale_prices', 'ops_stuck_transactions']);
     const gas = sink.emitted.find((e) => e.payload.event === 'low_gas')!;
     expect(gas).toMatchObject({ userId: 'u1', payload: { agentId: 'a1', operator: false } });
     expect(sink.emitted.filter((e) => e.payload.operator === true).every((e) => e.userId === null)).toBe(true);

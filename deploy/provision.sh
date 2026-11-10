@@ -38,6 +38,9 @@ mk_token() { # file group
 mk_token /etc/odin/secrets/signer-agent.token odin        # readable by signer + app (agent channel)
 mk_token /etc/odin/secrets/signer-guard.token odin-guard  # readable by signer + guard watcher only
 install -m 0644 "$APP/deploy/signer.mainnet.env" /etc/odin/signer.env
+# build commit for /healthz (git archive stores it in the tarball header)
+echo "BUILD_COMMIT=$(gzip -dc "$TARBALL" | git get-tar-commit-id 2>/dev/null || echo unknown)" > /etc/odin/build.env
+chmod 0644 /etc/odin/build.env
 install -m 0644 "$APP/deploy/chain.mainnet.env" /etc/odin/chain.env
 
 # --- database ------------------------------------------------------------------------------------
@@ -117,6 +120,11 @@ systemctl enable odin-web >/dev/null 2>&1
 systemctl restart odin-web
 
 # --- watchdog + backups (daily dump, weekly restore test) ----------------------------------------
+# services the watchdog expects up: runtime/backtest only once the LLM credential exists
+EXPECTED=signer,api,web,market,guard,notifier,indexer,signals
+[ -f /etc/odin/secrets/anthropic.env ] && EXPECTED=$EXPECTED,runtime,backtest
+echo "WATCHDOG_SERVICES=$EXPECTED" > /etc/odin/watchdog.env
+chmod 0644 /etc/odin/watchdog.env
 install -d -o postgres -g postgres -m 0700 /var/backups/odin
 for u in odin-watchdog.service odin-backup.service odin-backup.timer odin-restore-test.service odin-restore-test.timer; do
   install -m 0644 "$APP/deploy/$u" /etc/systemd/system/$u

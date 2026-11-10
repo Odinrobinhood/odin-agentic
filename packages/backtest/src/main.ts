@@ -1,3 +1,4 @@
+import { HEALTH_PORTS, Health } from '@odin/shared';
 import { getAddress } from 'viem';
 import { createPool } from '@odin/db';
 import { ClaudeProvider, DecisionEngine, PgTokenMeter } from '@odin/decision';
@@ -13,13 +14,16 @@ const engine = new DecisionEngine({
 const worker = new BacktestWorker({ pool, decide: (ctx) => engine.decide(ctx), usdg: getAddress(process.env.CHAIN_USDG!) });
 const log = (o: object) => console.log(JSON.stringify(o));
 log({ msg: 'backtest worker up' });
+const health = new Health('backtest', 3600000).listen(HEALTH_PORTS.backtest);
 
 for (;;) {
+  health.beat();
   try {
     const r = await worker.runNext();
     if (r) log({ msg: 'backtest', ...r });
     else await new Promise((res) => setTimeout(res, 5_000));
   } catch (e) {
+    health.fail((e as Error).message);
     log({ msg: 'backtest pass failed', error: (e as Error).message });
     await new Promise((res) => setTimeout(res, 5_000));
   }

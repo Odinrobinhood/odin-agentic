@@ -8,6 +8,7 @@ Type=simple
 User=odin-signer
 Group=odin-signer
 EnvironmentFile=/etc/odin/signer.env
+EnvironmentFile=-/etc/odin/build.env
 WorkingDirectory=/opt/odin/app
 ExecStart=/usr/bin/node packages/signer/src/main.ts
 Restart=on-failure

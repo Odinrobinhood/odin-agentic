@@ -363,6 +363,9 @@ importers:
       '@odin/executor':
         specifier: workspace:*
         version: link:../executor
+      '@odin/shared':
+        specifier: workspace:*
+        version: link:../shared
       pg:
         specifier: 8.13.1
         version: 8.13.1

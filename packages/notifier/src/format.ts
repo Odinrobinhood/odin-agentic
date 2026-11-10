@@ -57,6 +57,8 @@ export function formatAlert(source: string, payload: Record<string, unknown>): s
       return `[ops] Chain indexer is ${s(p.lagBlocks)} blocks behind the head.`;
     case 'ops_stale_prices':
       return `[ops] Market snapshots are stale (${s(p.ageSeconds)}s old).`;
+    case 'ops_service_down':
+      return `[ops] Service ${s(p.service)} is unhealthy: ${s(p.detail, 200)}`;
     case 'ops_check_failed':
       return `[ops] Watchdog check ${s(p.check)} failed: ${s(p.error, 200)}`;
     case 'test':

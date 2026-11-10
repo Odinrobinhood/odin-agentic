@@ -38,3 +38,16 @@ describe('untrusted on-chain text', () => {
     expect(block.slice(0, -'DATA>>>'.length).includes('DATA>>>')).toBe(false);
   });
 });
+
+describe('Health', () => {
+  it('reports ok while the loop beats, unhealthy when it goes silent, with the last error', async () => {
+    const { Health } = await import('../src/health.ts');
+    const h = new Health('x', 50);
+    expect(h.status()).toMatchObject({ ok: true, service: 'x', lastError: null });
+    h.fail('rpc down');
+    await new Promise((r) => setTimeout(r, 80));
+    expect(h.status()).toMatchObject({ ok: false, lastError: 'rpc down' });
+    h.beat();
+    expect(h.status()).toMatchObject({ ok: true, lastError: null });
+  });
+});

@@ -9,6 +9,7 @@ User=odin
 Group=odin
 EnvironmentFile=/etc/odin/chain.env
 EnvironmentFile=-/etc/odin/secrets/notifier.env
+EnvironmentFile=-/etc/odin/build.env
 WorkingDirectory=/opt/odin/app
 ExecStart=/usr/bin/node packages/notifier/src/main.ts
 Restart=on-failure

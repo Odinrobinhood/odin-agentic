@@ -1,3 +1,4 @@
+import { HEALTH_PORTS, Health } from '@odin/shared';
 import { createPool } from '@odin/db';
 import { ViemIndexerChain } from './chain.ts';
 import { Indexer } from './indexer.ts';
@@ -19,9 +20,11 @@ const indexer = new Indexer(chain, new PgIndexerStore(pool), {
 });
 const log = (o: object) => console.log(JSON.stringify(o, (_k, v) => (typeof v === 'bigint' ? v.toString() : v)));
 log({ msg: 'indexer up', head, minStartBlock: minStart });
+const health = new Health('indexer', 180000).listen(HEALTH_PORTS.indexer);
 
 let lastEnroll = 0;
 for (;;) {
+  health.beat();
   try {
     if (Date.now() - lastEnroll > 60_000) {
       const n = await indexer.enroll();
@@ -35,6 +38,7 @@ for (;;) {
     // caught up: every stream at the safe head
     if (steps.length === 0) await new Promise((r) => setTimeout(r, 2_000));
   } catch (e) {
+    health.fail((e as Error).message);
     log({ msg: 'index step failed', error: (e as Error).message.split('\n')[0] });
     await new Promise((r) => setTimeout(r, 5_000));
   }

@@ -1,7 +1,16 @@
 import { createPublicClient, fallback, getAddress, http, type Address } from 'viem';
 import type { Pool } from '@odin/db';
 import { FallbackChain, PgExecutionStore, checkNonce, reconcileInflight } from '@odin/executor';
+import { HEALTH_PORTS } from '@odin/shared';
 import type { AlertSink, WatchdogData } from './watchdog.ts';
+
+/** Health endpoints by service name; signer and API serve their own /healthz. */
+export const HEALTH_URLS: Record<string, string> = {
+  ...Object.fromEntries(Object.entries(HEALTH_PORTS).map(([k, p]) => [k, `http://127.0.0.1:${p}/healthz`])),
+  signer: 'http://127.0.0.1:7401/healthz',
+  api: 'http://127.0.0.1:7500/healthz',
+  web: 'http://127.0.0.1:3000/',
+};
 
 export class PgWatchdogData implements WatchdogData {
   private readonly pool: Pool;
@@ -9,8 +18,12 @@ export class PgWatchdogData implements WatchdogData {
   private readonly store: PgExecutionStore;
   private readonly c;
 
-  constructor(pool: Pool, rpcUrls: string[]) {
+  private readonly expected: string[];
+
+  /** `expected`: services that must be up on this host (WATCHDOG_SERVICES), others are not probed. */
+  constructor(pool: Pool, rpcUrls: string[], expected: string[] = Object.keys(HEALTH_URLS)) {
     this.pool = pool;
+    this.expected = expected.filter((s) => s !== 'watchdog' && HEALTH_URLS[s]);
     this.chain = new FallbackChain(rpcUrls);
     this.store = new PgExecutionStore(pool);
     this.c = createPublicClient({ transport: fallback(rpcUrls.map((u) => http(u, { timeout: 10_000 }))) });
@@ -68,6 +81,20 @@ export class PgWatchdogData implements WatchdogData {
     const r = await this.pool.query<{ b: string | null }>(`SELECT min(last_block) AS b FROM indexer_state WHERE contract IS NOT NULL`);
     if (!r.rows[0]?.b) return null;
     return (await this.c.getBlockNumber()) - BigInt(r.rows[0].b);
+  }
+
+  async services() {
+    return Promise.all(
+      this.expected.map(async (name) => {
+        try {
+          const r = await fetch(HEALTH_URLS[name]!, { signal: AbortSignal.timeout(3_000) });
+          const body = (await r.json().catch(() => ({}))) as { lastError?: string | null; silentMs?: number };
+          return { name, ok: r.ok, detail: r.ok ? 'ok' : `http ${r.status}${body.silentMs ? `, loop silent ${Math.round(body.silentMs / 1000)}s` : ''}${body.lastError ? `: ${body.lastError}` : ''}` };
+        } catch (e) {
+          return { name, ok: false, detail: `unreachable: ${(e as Error).message}` };
+        }
+      }),
+    );
   }
 
   async snapshotAge() {

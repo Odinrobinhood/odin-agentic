@@ -1,3 +1,4 @@
+import { HEALTH_PORTS, Health } from '@odin/shared';
 import { createPool } from '@odin/db';
 import { loadMarketConfig } from './config.ts';
 import { ViemMarketChain } from './chain.ts';
@@ -13,9 +14,11 @@ const log = (o: object) => console.log(JSON.stringify(o));
 
 await registry.ensureBaseAssets();
 log({ msg: 'market up', chainId: cfg.chainId });
+const health = new Health('market', 180000).listen(HEALTH_PORTS.market);
 
 let lastRefresh = 0;
 for (;;) {
+  health.beat();
   const started = Date.now();
   try {
     if (started - lastRefresh >= cfg.refreshRoutesEveryMs) {
@@ -26,6 +29,7 @@ for (;;) {
     const s = await takeSnapshot(chain, store, cfg, new Date(started));
     log({ msg: 'snapshot', rows: s.rows.length, failed: s.failed });
   } catch (e) {
+    health.fail((e as Error).message);
     log({ msg: 'tick failed', error: (e as Error).message });
   }
   // next minute boundary

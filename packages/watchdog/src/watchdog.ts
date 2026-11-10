@@ -17,6 +17,8 @@ export interface WatchdogData {
   indexerLag(): Promise<bigint | null>;
   /** Seconds since the newest market snapshot. */
   snapshotAge(): Promise<number | null>;
+  /** /healthz of every service expected to run on this host. */
+  services(): Promise<{ name: string; ok: boolean; detail: string }[]>;
 }
 
 export interface AlertSink {
@@ -113,6 +115,11 @@ export class Watchdog {
     await step('indexer', async () => {
       const lag = await this.data.indexerLag();
       if (lag !== null && lag > this.cfg.indexerMaxLagBlocks) await raise('indexer_lag', true, 'ops_indexer_lag', { lagBlocks: lag.toString() });
+    });
+    await step('services', async () => {
+      for (const s of await this.data.services()) {
+        if (!s.ok) await raise(`service_down:${s.name}`, true, 'ops_service_down', { service: s.name, detail: s.detail });
+      }
     });
     await step('snapshots', async () => {
       const age = await this.data.snapshotAge();
