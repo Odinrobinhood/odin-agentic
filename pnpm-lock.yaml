@@ -331,6 +331,21 @@ importers:
         specifier: 3.23.8
         version: 3.23.8
 
+  packages/watchdog:
+    dependencies:
+      '@odin/db':
+        specifier: workspace:*
+        version: link:../db
+      '@odin/executor':
+        specifier: workspace:*
+        version: link:../executor
+      pg:
+        specifier: 8.13.1
+        version: 8.13.1
+      viem:
+        specifier: 2.21.54
+        version: 2.21.54(typescript@5.8.3)(zod@3.25.76)
+
 packages:
 
   '@adraffy/ens-normalize@1.11.1':

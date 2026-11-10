@@ -4,7 +4,9 @@ import { Notifier, PgNotifyStore, TelegramSender, type Sender } from './notifier
 const pool = createPool(process.env.DATABASE_URL ?? 'postgresql://odin@/odin?host=/var/run/postgresql', { max: 3 });
 const senders: Sender[] = [];
 if (process.env.TELEGRAM_BOT_TOKEN) senders.push(new TelegramSender(process.env.TELEGRAM_BOT_TOKEN));
-const notifier = new Notifier(new PgNotifyStore(pool), senders);
+// operator alerts (watchdog) go to OPERATOR_TELEGRAM_CHAT_ID when Telegram is configured
+const operatorChat = process.env.OPERATOR_TELEGRAM_CHAT_ID;
+const notifier = new Notifier(new PgNotifyStore(pool), senders, operatorChat ? { operator: { kind: 'telegram', target: operatorChat } } : {});
 const log = (o: object) => console.log(JSON.stringify(o));
 log({ msg: 'notifier up', channels: ['in_app', ...senders.map((s) => s.kind)] });
 

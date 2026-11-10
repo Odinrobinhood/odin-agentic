@@ -1,0 +1,7 @@
+[Unit]
+Description=Odin Agentic daily Postgres backup
+
+[Service]
+Type=oneshot
+User=postgres
+ExecStart=/bin/bash /opt/odin/app/deploy/backup.sh

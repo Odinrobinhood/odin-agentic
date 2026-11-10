@@ -110,6 +110,13 @@ echo "== web app BFF: SIWE via httpOnly cookies, CSRF header, security headers"
 sleep 3
 (cd "$APP/apps/web" && sudo -u odin node scripts/staging-web.mjs)
 
+echo "== watchdog (real data; staging agent briefly live so low gas must fire)"
+(cd "$APP" && sudo -u odin env $(grep -v '^#' /etc/odin/chain.env | xargs) STAGING_AGENT_ID="$AGENT" node packages/watchdog/scripts/staging-watchdog.ts)
+
+echo "== backup + restore test"
+systemctl start odin-backup.service && journalctl -u odin-backup --no-pager -n 1 -o cat
+systemctl start odin-restore-test.service; journalctl -u odin-restore-test --no-pager -n 1 -o cat
+
 echo "== executor: signer -> real mainnet RPC broadcast from the unfunded staging wallet (must be refused: insufficient_gas)"
 (cd "$APP" && sudo -u odin env $(grep -v '^#' /etc/odin/chain.env | xargs) STAGING_AGENT_ID="$AGENT" \
   node packages/executor/scripts/staging-check.ts)

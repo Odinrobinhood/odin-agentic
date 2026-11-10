@@ -116,6 +116,16 @@ systemctl daemon-reload
 systemctl enable odin-web >/dev/null 2>&1
 systemctl restart odin-web
 
+# --- watchdog + backups (daily dump, weekly restore test) ----------------------------------------
+install -d -o postgres -g postgres -m 0700 /var/backups/odin
+for u in odin-watchdog.service odin-backup.service odin-backup.timer odin-restore-test.service odin-restore-test.timer; do
+  install -m 0644 "$APP/deploy/$u" /etc/systemd/system/$u
+done
+systemctl daemon-reload
+systemctl enable odin-watchdog odin-backup.timer odin-restore-test.timer >/dev/null 2>&1
+systemctl restart odin-watchdog
+systemctl start odin-backup.timer odin-restore-test.timer
+
 # --- guard watcher (OS user odin-guard: guard channel token + odin_guard DB role) ----------------
 install -m 0644 "$APP/deploy/odin-guard.service" /etc/systemd/system/odin-guard.service
 systemctl daemon-reload

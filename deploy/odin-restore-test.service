@@ -1,0 +1,8 @@
+[Unit]
+Description=Odin Agentic weekly restore test
+After=odin-backup.service
+
+[Service]
+Type=oneshot
+User=postgres
+ExecStart=/bin/bash /opt/odin/app/deploy/restore-test.sh

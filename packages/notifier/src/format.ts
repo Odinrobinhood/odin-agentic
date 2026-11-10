@@ -43,6 +43,22 @@ export function formatAlert(source: string, payload: Record<string, unknown>): s
     }
     case 'ai_signal':
       return `AI signal: ${short(p.token)} ${s(p.direction)} (confidence ${Math.round(Number(p.confidence) * 100)}%). ${s(p.rationale, 240)}`;
+    case 'low_gas':
+      return `Low gas: agent wallet ${short(p.wallet)} has ${(Number(p.balanceWei) / 1e18).toFixed(6)} ETH on Robinhood Chain. Top up native ETH so trades, take-profit and stop-loss can execute.`;
+    case 'ops_stuck_transactions':
+      return `[ops] ${s(p.pending)} transaction(s) stuck in signed/broadcast after reconciliation.`;
+    case 'ops_nonce_drift':
+      return `[ops] Nonce drift on ${short(p.wallet)}: chain ${s(p.chainNonce)} vs recorded ${s(p.recorded)} (drift ${s(p.drift)}).`;
+    case 'ops_scheduler_lag':
+      return `[ops] ${s(p.overdueAgents)} active agent(s) overdue by more than ${s(p.overdueSeconds)}s.`;
+    case 'ops_llm_errors':
+      return `[ops] LLM failures: ${s(p.failed)}/${s(p.total)} agent decisions in ${s(p.windowMinutes)} min.`;
+    case 'ops_indexer_lag':
+      return `[ops] Chain indexer is ${s(p.lagBlocks)} blocks behind the head.`;
+    case 'ops_stale_prices':
+      return `[ops] Market snapshots are stale (${s(p.ageSeconds)}s old).`;
+    case 'ops_check_failed':
+      return `[ops] Watchdog check ${s(p.check)} failed: ${s(p.error, 200)}`;
     case 'test':
       return 'Test notification from Odin Agentic.';
     default:

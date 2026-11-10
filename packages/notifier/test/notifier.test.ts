@@ -57,6 +57,17 @@ describe('Notifier', () => {
     expect(s2.alerts[0]).toMatchObject({ delivered: ['in_app'], error: 'telegram: not configured on this server' });
   });
 
+  it('sends operator alerts (no user) to the operator channel only', async () => {
+    const store = new MemStore();
+    const tg = new FakeTelegram();
+    store.alerts.push({ id: 'o', userId: null, source: 'system', attempts: 0, payload: { event: 'ops_scheduler_lag', operator: true, overdueAgents: 2, overdueSeconds: 180 } });
+    store.alerts.push({ id: 'x', userId: null, source: 'system', attempts: 0, payload: { event: 'ops_scheduler_lag' } });
+    await new Notifier(store, [tg], { operator: { kind: 'telegram', target: 'ops' } }).deliverOnce();
+    expect(tg.sent).toEqual([{ target: 'ops', text: '[ops] 2 active agent(s) overdue by more than 180s.' }]);
+    expect(store.alerts[0]!.delivered).toEqual(['operator_log', 'telegram']);
+    expect(store.alerts[1]!.delivered).toEqual(['in_app']);
+  });
+
   it('honours a per-alert channel override (in-app always)', async () => {
     const store = new MemStore();
     const tg = new FakeTelegram();

@@ -27,10 +27,13 @@ export const MAX_ATTEMPTS = 6;
 export class Notifier {
   private readonly store: NotifyStore;
   private readonly senders: Map<string, Sender>;
+  private readonly operator: Channel | null;
 
-  constructor(store: NotifyStore, senders: Sender[]) {
+  /** `operator`: where operator alerts (payload.operator = true, no user) go, e.g. the ops Telegram chat. */
+  constructor(store: NotifyStore, senders: Sender[], opts: { operator?: Channel } = {}) {
     this.store = store;
     this.senders = new Map(senders.map((s) => [s.kind, s]));
+    this.operator = opts.operator ?? null;
   }
 
   async deliverOnce(limit = 50): Promise<{ delivered: number; failed: number }> {
@@ -39,11 +42,14 @@ export class Notifier {
     for (const a of await this.store.claim(limit)) {
       const done = ['in_app'];
       const errors: string[] = [];
-      if (a.userId) {
+      const isOperator = !a.userId && a.payload.operator === true;
+      if (a.userId || isOperator) {
         const text = formatAlert(a.source, a.payload);
         // per-alert channel override (architecture §3.11): in-app always, external only if listed
         const only = Array.isArray(a.payload.channels) ? new Set((a.payload.channels as unknown[]).map(String)) : null;
-        for (const ch of (await this.store.channels(a.userId)).filter((c) => !only || only.has(c.kind))) {
+        const targets = isOperator ? (this.operator ? [this.operator] : []) : (await this.store.channels(a.userId!)).filter((c) => !only || only.has(c.kind));
+        if (isOperator) done[0] = 'operator_log';
+        for (const ch of targets) {
           const sender = this.senders.get(ch.kind);
           if (!sender) {
             errors.push(`${ch.kind}: not configured on this server`);
