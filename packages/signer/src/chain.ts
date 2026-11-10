@@ -1,4 +1,5 @@
 import { createPublicClient, fallback, http, parseAbi, zeroAddress, getAddress, type Address, type Hex } from 'viem';
+import { verifyEoaSignature } from '@odin/shared';
 
 export interface ChainReader {
   chainId(): Promise<number>;
@@ -7,7 +8,7 @@ export interface ChainReader {
   liquidPool(factory: Address, a: Address, b: Address, fee: number): Promise<Address | null>;
   /** Robinhood Stock Tokens: paused() or tokenPaused() (verified on-chain 2026-11-10; there is no per-wallet blocklist). */
   isPaused(token: Address): Promise<boolean>;
-  /** EIP-191 signature check for EOAs and ERC-1271 smart wallets. */
+  /** EIP-191 signature by an EOA, verified locally (never by asking an RPC). */
   verifyMessage(address: Address, message: string, signature: Hex): Promise<boolean>;
 }
 
@@ -49,6 +50,8 @@ export class ViemChainReader implements ChainReader {
   }
 
   verifyMessage(address: Address, message: string, signature: Hex): Promise<boolean> {
-    return this.client.verifyMessage({ address, message, signature });
+    // key export is the highest-stakes check: local ECDSA recovery only, so no RPC answer can approve it.
+    // Smart-wallet owners cannot export keys (they can still withdraw to their wallet).
+    return verifyEoaSignature(address, message, signature);
   }
 }

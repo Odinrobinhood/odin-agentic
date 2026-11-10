@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { createPublicClient, fallback, getAddress, http, parseAbi, type Address, type Hex } from 'viem';
 import { Executor, FallbackChain, HttpSignerClient, PgExecutionStore, loadExecutorConfig } from '@odin/executor';
-import { Rejection, type RejectionCode } from '@odin/shared';
+import { Rejection, verifyWalletSignature, type RejectionCode } from '@odin/shared';
 import { createPool } from '@odin/db';
 import { loadMarketConfig, PgMarketStore, TokenRegistry, ViemMarketChain } from '@odin/market';
 import { PgRuntimeStore } from '@odin/runtime';
@@ -39,8 +39,8 @@ const auth = new AuthService({
     refreshTtlSeconds: 30 * 86_400,
     nonceTtlSeconds: 10 * 60,
   },
-  // EOAs and ERC-1271 smart wallets on Robinhood Chain
-  verify: ({ address, message, signature }) => chain.verifyMessage({ address, message, signature }),
+  // EOAs verified locally; ERC-1271 smart wallets only when every configured RPC agrees (never one RPC's word)
+  verify: ({ address, message, signature }) => verifyWalletSignature(market.rpcUrls, address, message, signature),
 });
 
 const agents = new AgentService({

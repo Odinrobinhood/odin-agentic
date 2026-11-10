@@ -5,3 +5,4 @@ export * from './untrusted.ts';
 export * from './intents.ts';
 export * from './export.ts';
 export * from './health.ts';
+export * from './signature.ts';
