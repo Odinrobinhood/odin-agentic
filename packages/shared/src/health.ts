@@ -60,3 +60,11 @@ export const HEALTH_PORTS = {
   watchdog: 7607,
   backtest: 7608,
 } as const;
+
+/** Health endpoints by service name (shared by the watchdog and the public status page). */
+export const HEALTH_URLS: Record<string, string> = {
+  ...Object.fromEntries(Object.entries(HEALTH_PORTS).map(([k, p]) => [k, `http://127.0.0.1:${p}/healthz`])),
+  signer: 'http://127.0.0.1:7401/healthz',
+  api: 'http://127.0.0.1:7500/healthz',
+  web: 'http://127.0.0.1:3000/',
+};

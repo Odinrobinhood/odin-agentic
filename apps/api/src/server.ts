@@ -1,13 +1,14 @@
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import { z, type ZodTypeAny } from 'zod';
 import { getAddress, type Address, type Hex } from 'viem';
-import { Rejection, type RejectionCode } from '@odin/shared';
+import { CODE_HELP, Rejection, type RejectionCode } from '@odin/shared';
 import { searchCatalog } from '@odin/market';
 import type { AuthService } from './auth.ts';
 import type { AnalystEngine, AnalystStore } from '@odin/analyst';
 import { BacktestInput, type BacktestService } from './backtests.ts';
 import { AlertInput, AlertPatch, ProfileInput, type AlertService } from './alerts.ts';
 import type { NotificationService } from './notifications.ts';
+import type { StatusService } from './status.ts';
 import { CloseAllInput, ExportInput, WithdrawInput, type FundsService } from './funds.ts';
 import { AgentService, AssetsInput, ConfigInput, GuardOverrideInput, ModeInput, PaperFundInput, RiskInput, StatusInput, TpSlInput } from './agents.ts';
 
@@ -16,6 +17,7 @@ export type ApiDeps = {
   agents: AgentService;
   funds: FundsService;
   notifications: NotificationService;
+  status?: StatusService;
   analyst: { engine: AnalystEngine; store: AnalystStore };
   alerts: AlertService;
   backtests: BacktestService;
@@ -91,6 +93,13 @@ export function buildServer(d: ApiDeps): FastifyInstance {
   const aid = (req: FastifyRequest) => (req.params as { id: string }).id;
 
   app.get('/healthz', async () => ({ ok: true, commit: process.env.BUILD_COMMIT ?? 'dev' }));
+
+  // ── public (no account): status page and the rejection-code reference ─────────────────────────────
+  app.get('/v1/public/status', { preHandler: ipLimited }, async () => {
+    if (!d.status) throw new Rejection('internal_error', 'status not configured');
+    return d.status.get();
+  });
+  app.get('/v1/public/codes', async () => Object.entries(CODE_HELP).map(([code, h]) => ({ code, ...h })));
 
   // ── auth ────────────────────────────────────────────────────────────────────
   app.post('/v1/auth/nonce', { preHandler: ipLimited }, async () => d.auth.nonce());

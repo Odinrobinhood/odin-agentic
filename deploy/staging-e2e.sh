@@ -175,3 +175,8 @@ psql_su -d odin -c "SELECT symbol, is_stock_token, round(depth_usdg) FROM token_
 echo "== executor: signer -> real mainnet RPC broadcast from the unfunded staging wallet (must be refused: insufficient_gas)"
 (cd "$APP" && sudo -u odin env $(grep -v '^#' /etc/odin/chain.env | xargs) STAGING_AGENT_ID="$AGENT" \
   node packages/executor/scripts/staging-check.ts)
+
+echo "== public status page and code reference (no account)"
+curl -s -m 20 http://127.0.0.1:7500/v1/public/status | jq -c '{overall, services: [.services[] | "\(.name)=\(.status)"], data}'
+echo "codes documented: $(curl -s -m 10 http://127.0.0.1:7500/v1/public/codes | jq length)"
+echo "web /status: $(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/status)  /docs: $(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/docs)  /api/public/status: $(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/api/public/status)  /api/public/secret: $(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/api/public/agents)"

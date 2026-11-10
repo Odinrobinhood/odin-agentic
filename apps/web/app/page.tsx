@@ -27,6 +27,7 @@ export default function Home() {
       <button onClick={go} disabled={busy}>{busy ? 'Waiting for wallet…' : 'Connect wallet & sign in'}</button>
       {err && <p className="error">{err}</p>}
       <div className="warnbox">Markets move and agents can be wrong. You can lose the funds you deposit.</div>
+      <p className="muted"><a href="/docs">How it works</a> · <a href="/status">System status</a></p>
     </div>
   );
 }

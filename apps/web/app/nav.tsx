@@ -24,6 +24,8 @@ export default function Nav() {
           <Link href="/notifications">Notifications</Link>
         </>
       )}
+      <Link href="/docs">Docs</Link>
+      <Link href="/status">Status</Link>
       <span className="spacer" />
       {me ? (
         <span className="row">

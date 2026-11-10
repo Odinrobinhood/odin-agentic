@@ -1,16 +1,10 @@
 import { createPublicClient, fallback, getAddress, http, type Address } from 'viem';
 import type { Pool } from '@odin/db';
 import { FallbackChain, PgExecutionStore, checkNonce, reconcileInflight } from '@odin/executor';
-import { HEALTH_PORTS } from '@odin/shared';
+import { HEALTH_URLS } from '@odin/shared';
 import type { AlertSink, WatchdogData } from './watchdog.ts';
 
-/** Health endpoints by service name; signer and API serve their own /healthz. */
-export const HEALTH_URLS: Record<string, string> = {
-  ...Object.fromEntries(Object.entries(HEALTH_PORTS).map(([k, p]) => [k, `http://127.0.0.1:${p}/healthz`])),
-  signer: 'http://127.0.0.1:7401/healthz',
-  api: 'http://127.0.0.1:7500/healthz',
-  web: 'http://127.0.0.1:3000/',
-};
+export { HEALTH_URLS };
 
 export class PgWatchdogData implements WatchdogData {
   private readonly pool: Pool;
