@@ -12,7 +12,10 @@ const schedule = new PgSchedule(pool);
 const triggers = new TriggerWatcher({ store: new PgTriggerStore(pool), data: new PgRuleData(pool, (process.env.CHAIN_RPC_URLS ?? '').split(',').filter(Boolean)) });
 let lastTriggerCheck = 0;
 const owner = `${hostname()}:${process.pid}:${randomUUID().slice(0, 8)}`;
-const CONCURRENCY = Number(process.env.RUNTIME_CONCURRENCY ?? 8);
+// Ticks spend almost all their time waiting for the model, so concurrency, not CPU, sets capacity:
+// needed ≈ agents × tick seconds / cadence seconds. Load test 2026-11-11 (2 vCPU staging): 8 → 69 ticks/min
+// (300 agents lagged ~3 min); 48 → every agent on time, 15 CPU-s in 8 min, 169 MB, ≤ 10 DB connections.
+const CONCURRENCY = Number(process.env.RUNTIME_CONCURRENCY ?? 48);
 const LEASE_MS = 5 * 60_000; // longer than any tick: LLM call + approve + swap until deadline
 const log = (o: object) => console.log(JSON.stringify(o));
 
