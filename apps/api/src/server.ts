@@ -7,7 +7,7 @@ import type { AuthService } from './auth.ts';
 import type { AnalystEngine, AnalystStore } from '@odin/analyst';
 import { BacktestInput, type BacktestService } from './backtests.ts';
 import { AlertInput, AlertPatch, ProfileInput, type AlertService } from './alerts.ts';
-import { ChannelsInput, type NotificationService } from './notifications.ts';
+import type { NotificationService } from './notifications.ts';
 import { CloseAllInput, ExportInput, WithdrawInput, type FundsService } from './funds.ts';
 import { AgentService, AssetsInput, ConfigInput, GuardOverrideInput, ModeInput, PaperFundInput, RiskInput, StatusInput, TpSlInput } from './agents.ts';
 
@@ -241,8 +241,6 @@ export function buildServer(d: ApiDeps): FastifyInstance {
 
   // ── notifications (architecture §3.11) ───────────────────────────────────────
   app.get('/v1/notifications', { preHandler: authed }, async (req) => json(await d.notifications.feed(uid(req), lim((req.query as { limit?: string }).limit, 50))));
-  app.get('/v1/notifications/channels', { preHandler: authed }, async (req) => d.notifications.channels(uid(req)));
-  app.put('/v1/notifications/channels', { preHandler: authed }, async (req) => d.notifications.setChannels(uid(req), parse(ChannelsInput, req.body)));
   app.post('/v1/notifications/test', { preHandler: authed }, async (req) => d.notifications.test(uid(req)));
 
   // ── funds (architecture §6): recipient is always the owner; sensitive actions need a fresh SIWE ─────────

@@ -29,7 +29,7 @@ export class Notifier {
   private readonly senders: Map<string, Sender>;
   private readonly operator: Channel | null;
 
-  /** `operator`: where operator alerts (payload.operator = true, no user) go, e.g. the ops Telegram chat. */
+  /** `operator`: where operator alerts (payload.operator = true, no user) go, if an operator channel is ever configured. */
   constructor(store: NotifyStore, senders: Sender[], opts: { operator?: Channel } = {}) {
     this.store = store;
     this.senders = new Map(senders.map((s) => [s.kind, s]));
@@ -111,23 +111,5 @@ export class PgNotifyStore implements NotifyStore {
         WHERE id = $1`,
       [id, attempts, error, backoffSeconds, maxAttempts],
     );
-  }
-}
-
-/** Telegram Bot API (plain text, no parse mode). Enabled when TELEGRAM_BOT_TOKEN is set. */
-export class TelegramSender implements Sender {
-  readonly kind = 'telegram' as const;
-  private readonly token: string;
-  constructor(token: string) {
-    this.token = token;
-  }
-  async send(chatId: string, text: string): Promise<void> {
-    const res = await fetch(`https://api.telegram.org/bot${this.token}/sendMessage`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: true }),
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (!res.ok) throw new Error(`telegram ${res.status}`);
   }
 }

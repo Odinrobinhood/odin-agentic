@@ -21,7 +21,6 @@ export default function Alerts() {
   const [cond, setCond] = useState('price_below');
   const [fields, setFields] = useState<Record<string, string>>({});
   const [cooldown, setCooldown] = useState('3600');
-  const [telegram, setTelegram] = useState(true);
   const [prof, setProf] = useState({ mandate: '', model: 'claude-sonnet-5-5', tokens: '', cadenceSeconds: '3600' });
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const load = () => {
@@ -43,11 +42,10 @@ export default function Alerts() {
   const createAlert = () =>
     run(() => call('POST', '/alerts', {
       rule: { condition: cond, ...Object.fromEntries(CONDITIONS[cond]!.fields.map(([k]) => [k, NUMERIC.has(k) ? Number(fields[k]) : fields[k] ?? ''])) },
-      channels: telegram ? ['telegram'] : [],
       cooldownSeconds: Number(cooldown),
     }), 'Alert created');
   const createProfile = () =>
-    run(() => call('POST', '/signals/profiles', { mandate: prof.mandate, model: prof.model, tokens: prof.tokens.split(/[\s,]+/).filter(Boolean), cadenceSeconds: Number(prof.cadenceSeconds), channels: telegram ? ['telegram'] : [] }), 'Signal profile created');
+    run(() => call('POST', '/signals/profiles', { mandate: prof.mandate, model: prof.model, tokens: prof.tokens.split(/[\s,]+/).filter(Boolean), cadenceSeconds: Number(prof.cadenceSeconds) }), 'Signal profile created');
   return (
     <>
       <h1>Signals &amp; alerts</h1>
@@ -59,7 +57,6 @@ export default function Alerts() {
           <div><label>Condition</label><select value={cond} onChange={(e) => (setCond(e.target.value), setFields({}))}>{Object.entries(CONDITIONS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</select></div>
           {CONDITIONS[cond]!.fields.map(([k, l]) => <div key={k}><label>{l}</label><input value={fields[k] ?? ''} onChange={(e) => setFields({ ...fields, [k]: e.target.value })} /></div>)}
           <div><label>Cooldown (s)</label><input value={cooldown} onChange={(e) => setCooldown(e.target.value)} /></div>
-          <div><label>Telegram</label><select value={telegram ? 'y' : 'n'} onChange={(e) => setTelegram(e.target.value === 'y')}><option value="y">also send to Telegram</option><option value="n">in-app only</option></select></div>
         </div>
         <button onClick={createAlert} style={{ marginTop: 12 }}>Create alert</button>
         <table style={{ marginTop: 12 }}>

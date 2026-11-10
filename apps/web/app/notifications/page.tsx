@@ -20,11 +20,9 @@ const describe = (p: Any) => {
 
 export default function Notifications() {
   const [feed, setFeed] = useState<Any[]>([]);
-  const [chatId, setChatId] = useState('');
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const load = () => {
     call('GET', '/notifications?limit=100').then(setFeed).catch((e) => (e.code === 'unauthorized' ? (location.href = '/') : null));
-    call('GET', '/notifications/channels').then((c) => setChatId(c.telegram?.chatId ?? '')).catch(() => {});
   };
   useEffect(load, []);
   const run = async (fn: () => Promise<unknown>, ok: string) => {
@@ -41,8 +39,7 @@ export default function Notifications() {
     <>
       <h1>Notifications</h1>
       <div className="panel row">
-        <div style={{ flex: 1 }}><label>Telegram chat id (empty = off)</label><input value={chatId} onChange={(e) => setChatId(e.target.value)} placeholder="e.g. 123456789" /></div>
-        <button onClick={() => run(() => call('PUT', '/notifications/channels', { telegram: chatId ? { chatId, enabled: true } : null }), 'Saved')}>Save</button>
+        <p className="muted" style={{ flex: 1, margin: 0 }}>Alerts, signals, trades and TP/SL exits appear here (in-app only).</p>
         <button className="ghost" onClick={() => run(() => call('POST', '/notifications/test', {}), 'Test queued')}>Send test</button>
       </div>
       {msg && <p className={msg.ok ? 'ok' : 'error'}>{msg.text}</p>}

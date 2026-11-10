@@ -191,8 +191,8 @@ Every rejection has a `code` (e.g. `exceeds_position_limit`, `token_paused`, `pr
 - Runs for `active` **and** `paused` agents; only `retired` disables guards.
 
 ### 3.11 Notifier
-- Notifications for executed trades, triggered guards, low gas balance, agents stopped by repeated errors, and signals/alerts (Telegram / email / web push).
-- Per-user channel settings and per-alert channel overrides.
+- Notifications for executed trades, triggered guards, low gas balance, agents stopped by repeated errors, and signals/alerts.
+- In-app only (user decision 2026-11-10): no Telegram, email or web push. Operator alerts stay in the feed table and the notifier log.
 
 ### 3.12 Chain Indexer
 - Indexes `Transfer` events of every token in the registry and `Swap` events of every pool on Robinhood Chain, from a configured start block, with reorg handling.
@@ -327,7 +327,7 @@ Scheduler ──tick(agent)──▶ Agent Runtime
 - Structured logs per service, correlated via `agent_id` + `decision_id`.
 - `/healthz` per service reports the build commit.
 - Watchdog: repeated failed trades per agent, low gas balance, nonce drift, LLM provider error rate, scheduler lag.
-- Alerts to operator Telegram/email.
+- Operator alerts in `alert_events` and the notifier log (no external channels).
 
 ---
 
@@ -357,7 +357,7 @@ Everything below must be live with real money and real data on mainnet before la
 - Deposit / withdraw / key export, with SIWE step-up
 - Agent controls: activate, pause, resume, retire, close all positions
 - Dashboard: positions, NAV, realized/unrealized PnL, decision history + rationale + thesis, rejections with their codes, transactions with explorer links
-- Telegram / email / web push notifications
+- In-app notifications
 - AI Market Analyst chat with on-chain tools and sourced numbers
 - AI signal profiles and user-defined rule alerts
 - Portfolio tracker for SIWE, agent and watch-only wallets with PnL

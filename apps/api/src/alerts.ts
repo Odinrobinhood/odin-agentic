@@ -4,9 +4,10 @@ import { RuleSpec } from '@odin/signals';
 import { Rejection } from '@odin/shared';
 import { SUPPORTED_MODELS } from './agents.ts';
 
-const channels = z.array(z.enum(['telegram'])).max(5).default(['telegram']);
+// in-app only (no external channels): the feed always shows every alert
+const channels = z.array(z.never()).max(0).default([]);
 export const AlertInput = z.object({ rule: RuleSpec, channels, cooldownSeconds: z.number().int().min(60).max(7 * 86_400).default(3600), enabled: z.boolean().default(true) }).strict();
-export const AlertPatch = z.object({ channels: z.array(z.enum(['telegram'])).max(5).optional(), cooldownSeconds: z.number().int().min(60).max(7 * 86_400).optional(), enabled: z.boolean().optional() }).strict();
+export const AlertPatch = z.object({ channels: z.array(z.never()).max(0).optional(), cooldownSeconds: z.number().int().min(60).max(7 * 86_400).optional(), enabled: z.boolean().optional() }).strict();
 export const ProfileInput = z
   .object({
     mandate: z.string().max(20_000),

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Weekly restore test (architecture §9): restore the newest dump into a scratch database and compare
 # row counts of key tables with the live database. Runs as postgres via odin-restore-test.timer.
-# On failure an operator alert is queued (the notifier sends it to OPERATOR_TELEGRAM_CHAT_ID).
+# On failure an operator alert is queued (kept in alert_events and the notifier log).
 set -uo pipefail
 DIR=/var/backups/odin
 DB=odin_restore_test

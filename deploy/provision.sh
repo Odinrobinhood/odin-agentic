@@ -115,8 +115,7 @@ systemctl restart odin-api
 sleep 3
 systemctl --no-pager --lines=3 status odin-api || true
 
-# --- notifier (optional TELEGRAM_BOT_TOKEN in /etc/odin/secrets/notifier.env, 0440 root:odin) ----------
-[ -f /etc/odin/secrets/notifier.env ] && chown root:odin /etc/odin/secrets/notifier.env && chmod 0440 /etc/odin/secrets/notifier.env
+# --- notifier (in-app only; no external channels) ---------------------------------------------------
 install -m 0644 "$APP/deploy/odin-notifier.service" /etc/systemd/system/odin-notifier.service
 systemctl daemon-reload
 systemctl enable odin-notifier >/dev/null 2>&1

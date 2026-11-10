@@ -1,13 +1,5 @@
-import { z } from 'zod';
 import type { Pool } from '@odin/db';
 import { Rejection } from '@odin/shared';
-
-export const ChannelsInput = z
-  .object({
-    /** Telegram chat id (numeric, or @channelname); null removes the channel. */
-    telegram: z.object({ chatId: z.string().regex(/^(-?[0-9]{1,20}|@[A-Za-z0-9_]{5,32})$/), enabled: z.boolean().default(true) }).strict().nullable().optional(),
-  })
-  .strict();
 
 export class NotificationService {
   private readonly pool: Pool;
@@ -23,23 +15,6 @@ export class NotificationService {
       [userId, Math.min(Math.max(limit, 1), 200)],
     );
     return r.rows;
-  }
-
-  async channels(userId: string) {
-    const r = await this.pool.query<{ kind: string; target: string; enabled: boolean }>('SELECT kind, target, enabled FROM notification_channels WHERE user_id = $1', [userId]);
-    return { in_app: { enabled: true }, ...Object.fromEntries(r.rows.map((c) => [c.kind, { chatId: c.target, enabled: c.enabled }])) };
-  }
-
-  async setChannels(userId: string, input: z.infer<typeof ChannelsInput>) {
-    if (input.telegram === null) await this.pool.query(`DELETE FROM notification_channels WHERE user_id = $1 AND kind = 'telegram'`, [userId]);
-    else if (input.telegram) {
-      await this.pool.query(
-        `INSERT INTO notification_channels (user_id, kind, target, enabled) VALUES ($1, 'telegram', $2, $3)
-         ON CONFLICT (user_id, kind) DO UPDATE SET target = EXCLUDED.target, enabled = EXCLUDED.enabled`,
-        [userId, input.telegram.chatId, input.telegram.enabled],
-      );
-    }
-    return this.channels(userId);
   }
 
   async test(userId: string) {
