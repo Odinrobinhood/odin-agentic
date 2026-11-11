@@ -15,7 +15,8 @@ import { AlertService } from './alerts.ts';
 import { BacktestService } from './backtests.ts';
 import { PortfolioService, ViemPortfolioChain } from '@odin/portfolio';
 import Anthropic from '@anthropic-ai/sdk';
-import { AnalystEngine, AnalystStore, AnalystTools, ClaudeAnalystLLM } from '@odin/analyst';
+import { AnalystEngine, AnalystStore, AnalystTools, ClaudeAnalystLLM, OpenRouterAnalystLLM, RoutingAnalystLLM } from '@odin/analyst';
+import { openRouterModels } from '@odin/decision';
 import { PgTokenMeter } from '@odin/decision';
 
 function req(key: string): string {
@@ -89,14 +90,24 @@ const funds = new FundsService({
 });
 
 const portfolio = new PortfolioService({ pool, chain: new ViemPortfolioChain(market.rpcUrls, market.quoter), usdg: market.usdg, weth: market.weth });
+/** ANALYST_MODEL, else Claude Sonnet 5.5 with an Anthropic key, else the first allowlisted OpenRouter model. */
+function analystModel(): string {
+  if (process.env.ANALYST_MODEL) return process.env.ANALYST_MODEL;
+  if (!process.env.ANTHROPIC_API_KEY && process.env.OPENROUTER_API_KEY) return openRouterModels()[0] ?? 'claude-sonnet-5-5';
+  return 'claude-sonnet-5-5';
+}
+
 const analyst = {
   store: new AnalystStore(pool),
   engine: new AnalystEngine({
-    // without ANTHROPIC_API_KEY every call fails and the route answers llm_unavailable
-    llm: process.env.ANTHROPIC_API_KEY ? new ClaudeAnalystLLM(new Anthropic()) : { call: async () => { throw new Error('no LLM credential configured on this server'); } },
+    // Claude for claude-* models, OpenRouter for openrouter/*; a model without its credential answers llm_unavailable
+    llm: new RoutingAnalystLLM({
+      claude: process.env.ANTHROPIC_API_KEY ? new ClaudeAnalystLLM(new Anthropic()) : null,
+      openrouter: process.env.OPENROUTER_API_KEY ? new OpenRouterAnalystLLM({ apiKey: process.env.OPENROUTER_API_KEY, zdr: process.env.OPENROUTER_ZDR === '1' }) : null,
+    }),
     tools: new AnalystTools({ pool, rpcUrls: market.rpcUrls, usdg: market.usdg, portfolio: (userId) => portfolio.forUser(userId) }),
     meter: new PgTokenMeter(pool),
-    config: { model: process.env.ANALYST_MODEL ?? 'claude-opus-5-5', dailyTokenBudget: Number(process.env.DECISION_DAILY_TOKEN_BUDGET ?? 2_000_000) },
+    config: { model: analystModel(), dailyTokenBudget: Number(process.env.DECISION_DAILY_TOKEN_BUDGET ?? 2_000_000) },
   }),
 };
 

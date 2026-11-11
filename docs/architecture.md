@@ -102,7 +102,7 @@
 
 ### 3.5 Decision Engine (LLM)
 - **Provider abstraction**: one interface `Decide(context) → Decision`, one implementation per provider (switching models requires no other code change).
-- **Providers** (2026-11-11): Anthropic (Claude, direct) and OpenRouter (OpenAI-compatible, many vendors). OpenRouter models are an operator allowlist (`OPENROUTER_MODELS`), routed only to providers that support structured outputs and do not store prompts (`data_collection: deny`, optional ZDR). Every reply, from any provider, passes the same strict schema validation; a weak model can only make an agent hold. The AI Market Analyst stays on Claude (its tool loop uses the Anthropic API directly).
+- **Providers** (2026-11-11): Anthropic (Claude, direct) and OpenRouter (OpenAI-compatible, many vendors). OpenRouter models are an operator allowlist (`OPENROUTER_MODELS`), routed only to providers that support structured outputs and do not store prompts (`data_collection: deny`, optional ZDR). Every reply, from any provider, passes the same strict schema validation; a weak model can only make an agent hold. The AI Market Analyst runs on either: an adapter converts its tool loop to OpenAI-compatible function calling for OpenRouter models.
 - **User-designed AI** — every field below belongs to the user and can be changed at any time (each change is stored as a new version):
   | Setting | Content |
   |---|---|
