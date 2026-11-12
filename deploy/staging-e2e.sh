@@ -163,7 +163,8 @@ echo "== watchdog (real data; staging agent briefly live so low gas must fire)"
 
 echo "== backup + restore test"
 systemctl start odin-backup.service && journalctl -u odin-backup --no-pager -n 1 -o cat
-systemctl start odin-restore-test.service; journalctl -u odin-restore-test --no-pager -n 1 -o cat
+# the weekly restore test takes minutes on a large catalog: start it without blocking (its own alert reports failures)
+systemctl start --no-block odin-restore-test.service && echo "restore test started in the background"
 
 echo "== /healthz of every service (build commit)"
 for p in 7401 7500 7601 7603 7604 7605 7606 7607; do curl -s -m 3 http://127.0.0.1:$p/healthz | jq -c '{service: (.service // .channel // "api"), ok, commit: (.commit[0:7])}'; done
