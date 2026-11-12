@@ -29,12 +29,12 @@ const POWERS = [
   { icon: '/art/ravens.webp', name: 'Huginn & Muninn', what: 'Analyst & signals', status: 'available', text: 'Answers from on-chain tools with cited sources; AI signals and rule alerts on your schedule.' },
   { icon: '/art/seat.webp', name: 'Hliðskjálf', what: 'Portfolio', status: 'available', text: 'Your wallet, your agents and watched addresses at their realizable value.' },
   { icon: '/art/wallet.webp', name: 'The hoard', what: 'Your funds', status: 'available', text: 'Withdrawals go only to the wallet you signed in with. Export the agent key any time.' },
-  { icon: '/art/gungnir.webp', name: 'Gungnir', what: 'Live trading', status: 'in testing', text: 'The isolated signer is built and reviewed internally; live funds come after a small-funds mainnet trial.' },
+  { icon: '/art/gungnir.webp', name: 'Gungnir', what: 'Live trading', status: 'live', text: 'Real trades on Robinhood Chain mainnet. An isolated signer prices every swap itself and signs only through one pinned router into the agent’s own wallet.' },
 ];
 
 const ROADMAP = [
-  ['01', 'Public launch', 'in pipeline', 'Domain, TLS and the web app open to everyone.'],
-  ['02', 'Live trading trial', 'in testing', 'Buy, sell, multi-hop, take-profit, stop-loss and withdraw with small funds on mainnet.'],
+  ['01', 'Public launch', 'live', 'odinrobinhood.com is open to everyone, over HTTPS.'],
+  ['02', 'Live trading', 'live', 'Agents trade real funds on Robinhood Chain mainnet — first live trades confirmed on-chain, gas about a cent per trade.'],
   ['03', 'External security audit', 'planned', 'An independent review of the signer, withdrawals and key export.'],
 ];
 
@@ -47,7 +47,7 @@ const FAQ = [
   ['What happens if the AI is down?', 'The agent holds and takes no new trades. Take-profit and stop-loss keep running on their own service.'],
 ];
 
-const statusTone = (s: string) => (s === 'available' ? 'good' : s === 'beta' || s === 'in testing' ? 'warn' : '');
+const statusTone = (s: string) => (s === 'available' || s === 'live' ? 'good' : s === 'beta' || s === 'in testing' ? 'warn' : '');
 
 export default function Landing() {
   const [signedIn, setSignedIn] = useState(false);
