@@ -9,8 +9,9 @@ import { TriggerSpec } from '@odin/signals';
 /** Models offered at launch (architecture §11.2); must match the Decision Engine's provider. */
 export const SUPPORTED_MODELS = ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'] as const;
 
-/** Models a config may name: Claude, plus the OpenRouter models the operator allowlisted (OPENROUTER_MODELS). */
-export const allowedModels = (): string[] => [...SUPPORTED_MODELS, ...openRouterModels()];
+/** Models a config may name: Claude (when its key is configured), plus the operator-allowlisted OpenRouter models (OPENROUTER_MODELS). */
+// Claude direct only with an Anthropic key on this server; order matters: the web app pre-selects the first entry
+export const allowedModels = (): string[] => [...(process.env.ANTHROPIC_API_KEY ? SUPPORTED_MODELS : []), ...openRouterModels()];
 export const modelSchema = z.string().max(200).refine((m) => allowedModels().includes(m), 'model is not offered on this server (see GET /v1/models)');
 export const providerOf = (model: string) => (model.startsWith(OPENROUTER_PREFIX) ? 'openrouter' : 'anthropic');
 

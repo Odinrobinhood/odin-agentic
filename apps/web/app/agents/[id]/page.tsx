@@ -159,7 +159,7 @@ function Strategy({ id, agent, reload }: { id: string; agent: Any; reload: () =>
   }, []);
   const [f, setF] = useState({
     systemPrompt: c.system_prompt ?? '',
-    model: c.model_name ?? 'claude-haiku-5-5',
+    model: (c.model_name as string | undefined) ?? '',
     quoteAsset: c.quote_symbol === 'WETH' ? 'WETH' : 'USDG',
     cadenceSeconds: c.cadence_seconds ?? 3600,
     maxTokens: c.max_tokens ?? 16000,
@@ -167,6 +167,10 @@ function Strategy({ id, agent, reload }: { id: string; agent: Any; reload: () =>
     candlesCount: c.context_inputs?.candles?.count ?? 16,
     history: c.context_inputs?.history ?? 5,
   });
+  // a new agent pre-selects the server's first model (the recommended default)
+  useEffect(() => {
+    if (!f.model && models[0]) setF((x) => ({ ...x, model: models[0]! }));
+  }, [models, f.model]);
   const [triggers, setTriggers] = useState<Any[]>(c.triggers ?? []);
   const [versions, setVersions] = useState<Any[]>([]);
   const { run, view } = useMsg();
@@ -190,7 +194,7 @@ function Strategy({ id, agent, reload }: { id: string; agent: Any; reload: () =>
         <label>Strategy / mandate (your rules — the AI follows these)</label>
         <textarea value={f.systemPrompt} onChange={set('systemPrompt')} placeholder="e.g. Buy TSLA stock token on dips of 3% within a day; take profit gradually; never hold more than two tokens." />
         <div className="grid" style={{ marginTop: 12 }}>
-          <div><label>Model</label><select value={f.model} onChange={set('model')}>{(models.includes(f.model) ? models : [f.model, ...models]).map((m) => <option key={m}>{m}</option>)}</select></div>
+          <div><label>Model</label><select value={f.model} onChange={set('model')}>{(f.model && !models.includes(f.model) ? [f.model, ...models] : models).map((m) => <option key={m}>{m}</option>)}</select></div>
           <div><label>Quote asset (base)</label><select value={f.quoteAsset} onChange={set('quoteAsset')}><option>USDG</option><option value="WETH">ETH (WETH)</option></select></div>
           <div><label>Cadence (seconds, min 60)</label><input type="number" min={60} value={f.cadenceSeconds} onChange={set('cadenceSeconds')} /></div>
           <div><label>Max output tokens</label><input type="number" value={f.maxTokens} onChange={set('maxTokens')} /></div>

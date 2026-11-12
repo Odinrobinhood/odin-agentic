@@ -86,7 +86,7 @@ export const unusualText = (s?: string | null) => !!s && /[^\x20-\x7E]/.test(s);
 /** Models this server offers (Claude + operator-allowlisted OpenRouter models), fetched once per page. */
 let modelsCache: Promise<string[]> | null = null;
 export function availableModels(): Promise<string[]> {
-  modelsCache ??= call('GET', '/models').then((r: { id: string }[]) => r.map((m) => m.id)).catch(() => ['claude-haiku-5-5']);
+  modelsCache ??= call('GET', '/models').then((r: { id: string }[]) => r.map((m) => m.id)).catch(() => []);
   return modelsCache;
 }
 

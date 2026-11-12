@@ -25,7 +25,10 @@ export default function Alerts() {
   const [cond, setCond] = useState('price_below');
   const [fields, setFields] = useState<Record<string, string>>({});
   const [cooldown, setCooldown] = useState('3600');
-  const [prof, setProf] = useState({ mandate: '', model: 'claude-haiku-5-5', tokens: '', cadenceSeconds: '3600' });
+  const [prof, setProf] = useState({ mandate: '', model: '', tokens: '', cadenceSeconds: '3600' });
+  useEffect(() => {
+    if (!prof.model && models[0]) setProf((p) => ({ ...p, model: models[0]! }));
+  }, [models, prof.model]);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const load = () => {
     call('GET', '/alerts').then(setAlerts).catch((e) => (e.code === 'unauthorized' ? (location.href = '/') : null));

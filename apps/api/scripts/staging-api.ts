@@ -26,10 +26,13 @@ const login = await call('POST', '/v1/auth/verify', { message, signature: await 
 show('-- siwe login:', { status: login.status, body: { address: login.body.address, expiresIn: login.body.expiresIn } });
 const t = login.body.accessToken as string;
 
+const models = (await call('GET', '/v1/models', undefined, t)).body as { id: string }[];
+console.log('-- models offered:', JSON.stringify(models.map((m) => m.id)));
+const model = models[0]!.id;
 const agent = await call('POST', '/v1/agents', { name: 'staging api agent' }, t);
 show('-- create agent (wallet from signer):', agent);
 const id = agent.body.id as string;
-show('-- config v1:', await call('POST', `/v1/agents/${id}/config`, { systemPrompt: 'Hold unless WETH drops 3% in an hour.', model: 'claude-opus-5-5', quoteAsset: 'USDG', cadenceSeconds: 300, contextInputs: { candles: { period_minutes: 15, count: 16 } } }, t));
+show('-- config v1:', await call('POST', `/v1/agents/${id}/config`, { systemPrompt: 'Hold unless WETH drops 3% in an hour.', model, quoteAsset: 'USDG', cadenceSeconds: 300, contextInputs: { candles: { period_minutes: 15, count: 16 } } }, t));
 show('-- assets (real registry):', await call('PUT', `/v1/agents/${id}/assets`, { tokens: [process.env.CHAIN_WETH] }, t));
 show('-- bad asset (not a token):', await call('PUT', `/v1/agents/${id}/assets`, { tokens: ['0x000000000000000000000000000000000000dead'] }, t));
 show('-- tp/sl:', await call('PUT', `/v1/agents/${id}/tpsl`, { stopLoss: { mode: 'pct', value: 4 }, takeProfit: { mode: 'pct', value: 8 } }, t));
@@ -78,7 +81,7 @@ console.log('-- portfolio:', JSON.stringify({ valueUsdg: Math.round(pf.valueUsdg
 show('-- alert price_below 100000:', await call('POST', '/v1/alerts', { rule: { condition: 'price_below', token: process.env.CHAIN_WETH, price: 100000 }, channels: [], cooldownSeconds: 3600 }, t));
 show('-- alert wallet_activity pool:', await call('POST', '/v1/alerts', { rule: { condition: 'wallet_activity', address: '0x52e65b17fb6e5ba00ed806f37afcd2daa50271ca' }, channels: [], cooldownSeconds: 60 }, t));
 show('-- bad alert (not a condition):', await call('POST', '/v1/alerts', { rule: { condition: 'buy', token: process.env.CHAIN_WETH } }, t));
-show('-- signal profile:', await call('POST', '/v1/signals/profiles', { mandate: 'Flag strong 1h momentum.', model: 'claude-sonnet-5-5', tokens: [process.env.CHAIN_WETH], cadenceSeconds: 3600, channels: [] }, t));
+show('-- signal profile:', await call('POST', '/v1/signals/profiles', { mandate: 'Flag strong 1h momentum.', model, tokens: [process.env.CHAIN_WETH], cadenceSeconds: 3600, channels: [] }, t));
 await new Promise((r) => setTimeout(r, 35_000));
 const profs = (await call('GET', '/v1/signals/profiles', undefined, t)).body as unknown as { last_error: string | null; last_run_at: string | null }[];
 console.log('-- signal profile run:', JSON.stringify(profs.map((p) => ({ ran: !!p.last_run_at, last_error: p.last_error }))));

@@ -8,6 +8,9 @@ import { createPool, type Pool } from '@odin/db';
 import { AuthService } from '../src/auth.ts';
 import { AgentService } from '../src/agents.ts';
 import { buildServer } from '../src/server.ts';
+
+// Claude models are offered only with an Anthropic key configured
+process.env.ANTHROPIC_API_KEY ??= 'test-key';
 import { FundsService } from '../src/funds.ts';
 import { NotificationService } from '../src/notifications.ts';
 import { AlertService } from '../src/alerts.ts';
