@@ -1,4 +1,5 @@
 'use client';
+import { PageHero } from '../motion';
 import { useEffect, useState } from 'react';
 import { call, explorerAddress, fmt, short, units, unusualText } from '@/lib/client';
 
@@ -31,7 +32,7 @@ export default function Portfolio() {
   };
   return (
     <>
-      <h1>Portfolio</h1>
+      <PageHero art="/art/seat.jpg" kicker="Hliðskjálf" title="Portfolio" text="Every realm from one seat — valued at what you could truly sell for." />
       <div className="panel row">
         <div style={{ flex: 2 }}><label>Watch a wallet on Robinhood Chain (read-only)</label><input value={addr} onChange={(e) => setAddr(e.target.value)} placeholder="0x…" /></div>
         <div style={{ flex: 1 }}><label>Label</label><input value={label} onChange={(e) => setLabel(e.target.value)} /></div>

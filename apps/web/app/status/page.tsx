@@ -1,4 +1,5 @@
 'use client';
+import { PageHero } from '../motion';
 import { useEffect, useState } from 'react';
 
 type Status = {
@@ -25,7 +26,7 @@ export default function StatusPage() {
   }, []);
   return (
     <>
-      <h1>System status</h1>
+      <PageHero art="/art/yggdrasil.jpg" kicker="Yggdrasil" title="System status" text="Take-profit and stop-loss run on their own service and keep guarding even if the AI is down." />
       {err && <p className="error">{err}</p>}
       {s && (
         <>

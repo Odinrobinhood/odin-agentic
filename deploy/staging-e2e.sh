@@ -189,3 +189,7 @@ echo "script-src: $(echo "$CSP" | tr ';' '\n' | grep script-src)"
 TOTAL=$(grep -o '<script[^>]*>' /tmp/odin-docs.html | wc -l)
 WITH=$(grep -o '<script[^>]*>' /tmp/odin-docs.html | grep -c "nonce=\"$N\"")
 echo "scripts: $TOTAL, with this request's nonce: $WITH"
+
+echo "== redesigned web app (Odin Robinhood)"
+echo "public prices: $(curl -s -m 20 http://127.0.0.1:7500/v1/public/prices | jq -c '[.[] | "\(.symbol)=\(.price|floor)"]')"
+echo "landing: $(curl -s -m 20 http://127.0.0.1:3000/ | grep -o -m1 'Odin Robinhood' || echo MISSING)  art: $(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/art/mascot.jpg)  bff prices: $(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/api/public/prices)"

@@ -8,7 +8,7 @@ import type { AnalystEngine, AnalystStore } from '@odin/analyst';
 import { BacktestInput, type BacktestService } from './backtests.ts';
 import { AlertInput, AlertPatch, ProfileInput, type AlertService } from './alerts.ts';
 import type { NotificationService } from './notifications.ts';
-import type { StatusService } from './status.ts';
+import type { PublicPrices, StatusService } from './status.ts';
 import { CloseAllInput, ExportInput, WithdrawInput, type FundsService } from './funds.ts';
 import { AgentService, AssetsInput, ConfigInput, GuardOverrideInput, ModeInput, PaperFundInput, RiskInput, StatusInput, TpSlInput, allowedModels, providerOf } from './agents.ts';
 
@@ -18,6 +18,7 @@ export type ApiDeps = {
   funds: FundsService;
   notifications: NotificationService;
   status?: StatusService;
+  prices?: PublicPrices;
   analyst: { engine: AnalystEngine; store: AnalystStore };
   alerts: AlertService;
   backtests: BacktestService;
@@ -98,6 +99,10 @@ export function buildServer(d: ApiDeps): FastifyInstance {
   app.get('/v1/public/status', { preHandler: ipLimited }, async () => {
     if (!d.status) throw new Rejection('internal_error', 'status not configured');
     return d.status.get();
+  });
+  app.get('/v1/public/prices', { preHandler: ipLimited }, async () => {
+    if (!d.prices) throw new Rejection('internal_error', 'prices not configured');
+    return d.prices.get();
   });
   app.get('/v1/public/codes', async () => Object.entries(CODE_HELP).map(([code, h]) => ({ code, ...h })));
 

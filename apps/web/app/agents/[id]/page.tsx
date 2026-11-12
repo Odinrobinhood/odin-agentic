@@ -37,10 +37,20 @@ export default function AgentPage({ params }: { params: Promise<{ id: string }> 
   if (!agent) return <p className="muted">Loading…</p>;
   return (
     <>
-      <h1>
-        {agent.name} <span className={`tag ${agent.status === 'active' ? 'good' : 'warn'}`}>{agent.status}</span>{' '}
-        <span className={`tag ${agent.mode === 'live' ? 'bad' : ''}`}>{agent.mode}</span>
-      </h1>
+      <section className="hero-banner">
+        <img className="zoomin" src="/art/shield.jpg" alt="" aria-hidden="true" />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <a href="/agents" className="muted" style={{ fontSize: 14 }}>← Einherjar · all agents</a>
+          <div className="row" style={{ gap: 8 }}>
+            {agent.status === 'active' ? <span className="tag good"><span className="live-dot" style={{ width: 6, height: 6 }} />active</span> : <span className={`tag ${agent.status === 'retired' ? 'bad' : 'warn'}`}>{agent.status}</span>}
+            <span className={`tag ${agent.mode === 'live' ? 'bad' : 'warn'}`}>{agent.mode}</span>
+            {agent.config?.model_name && <span className="tag">{String(agent.config.model_name).replace(/^openrouter\//, '')}</span>}
+            {agent.config?.cadence_seconds && <span className="tag">every {agent.config.cadence_seconds >= 3600 ? `${agent.config.cadence_seconds / 3600} h` : `${Math.round(agent.config.cadence_seconds / 60)} min`}</span>}
+            {agent.config?.version && <span className="tag">strategy v{agent.config.version}</span>}
+          </div>
+          <h1 style={{ margin: 0, fontSize: 'clamp(38px, 6vw, 62px)' }}>{agent.name}</h1>
+        </div>
+      </section>
       <div className="tabs">
         {TABS.map((t) => (
           <button key={t} className={t === tab ? 'on' : ''} onClick={() => setTab(t)}>{t}</button>
@@ -115,7 +125,10 @@ function Overview({ id, agent, reload }: { id: string; agent: Any; reload: () =>
               const g = (t: string) => p.guards.find((x: Any) => x.type === t);
               return (
                 <tr key={p.id}>
-                  <td>{p.symbol} <span className="mono muted">{short(p.token_address)}</span></td>
+                  <td style={{ minWidth: 200 }}>
+                    <strong>{p.symbol}</strong> <span className="mono muted">{short(p.token_address)}</span>
+                    <GuardBar price={Number(p.price_usdg)} sl={g('stop_loss') ? Number(g('stop_loss').trigger) : null} tp={g('take_profit') ? Number(g('take_profit').trigger) : null} />
+                  </td>
                   <td>{p.mode}</td>
                   <td>{units(p.qty, p.decimals)}</td>
                   <td>{fmt(p.avg_entry_price, 4)}</td>
@@ -134,6 +147,21 @@ function Overview({ id, agent, reload }: { id: string; agent: Any; reload: () =>
         </table>
       </div>
     </>
+  );
+}
+
+/** Where the price sits between the user's stop-loss and take-profit; the marker glides when it moves. */
+function GuardBar({ price, sl, tp }: { price: number; sl: number | null; tp: number | null }) {
+  if (!Number.isFinite(price) || sl === null || tp === null || !(tp > sl)) return null;
+  const pct = Math.min(100, Math.max(0, ((price - sl) / (tp - sl)) * 100));
+  return (
+    <div title={`Price ${fmt(price, 4)} between stop-loss ${fmt(sl, 4)} and take-profit ${fmt(tp, 4)}`}>
+      <div className="guardbar"><span style={{ left: `${pct}%` }} /></div>
+      <div className="row mono" style={{ justifyContent: 'space-between', fontSize: 11 }}>
+        <span style={{ color: 'var(--ember)' }}>SL</span>
+        <span style={{ color: 'var(--rune)' }}>TP</span>
+      </div>
+    </div>
   );
 }
 

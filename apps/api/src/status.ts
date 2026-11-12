@@ -73,3 +73,42 @@ export class StatusService {
     };
   }
 }
+
+export type PublicPrice = { symbol: string; address: string; price: number; changePct: number | null; asOf: string };
+
+/**
+ * Public price tape (landing page ticker): the latest USDG price of every registered token from the minute
+ * snapshots, with its change over ~24 h when recorded. Only fresh prices (< 1 h) are published; cached 30 s.
+ * Symbols come from the registry, already sanitized; the web app renders them as text.
+ */
+export class PublicPrices {
+  private readonly pool: Pool;
+  private cache: { at: number; value: Promise<PublicPrice[]> } | null = null;
+  constructor(pool: Pool) {
+    this.pool = pool;
+  }
+  get(): Promise<PublicPrice[]> {
+    if (this.cache && Date.now() - this.cache.at < 30_000) return this.cache.value;
+    const value = this.pool
+      .query<{ symbol: string; address: string; price: string; prev: string | null; ts: Date }>(
+        `SELECT t.symbol, t.address, s.price, s.ts,
+                (SELECT p.price FROM market_snapshots p WHERE p.token_address = t.address AND p.ts <= now() - interval '24 hours'
+                  ORDER BY p.ts DESC LIMIT 1) AS prev
+           FROM tokens t
+           JOIN LATERAL (SELECT price, ts FROM market_snapshots WHERE token_address = t.address ORDER BY ts DESC LIMIT 1) s ON true
+          WHERE s.ts > now() - interval '1 hour' AND t.symbol <> ''
+          ORDER BY t.is_stock_token DESC, t.symbol
+          LIMIT 40`,
+      )
+      .then((r) =>
+        r.rows.map((x) => {
+          const price = Number(x.price);
+          const prev = x.prev === null ? null : Number(x.prev);
+          return { symbol: x.symbol, address: x.address, price, changePct: prev && prev > 0 ? ((price - prev) / prev) * 100 : null, asOf: x.ts.toISOString() };
+        }),
+      );
+    this.cache = { at: Date.now(), value };
+    value.catch(() => (this.cache = null));
+    return value;
+  }
+}

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { api } from '@/lib/server';
 
 /** Public, read-only API data (no account): only these names are reachable. */
-const ALLOWED = new Set(['status', 'codes']);
+const ALLOWED = new Set(['status', 'codes', 'prices']);
 
 export async function GET(req: Request, ctx: { params: Promise<{ name: string }> }) {
   const { name } = await ctx.params;

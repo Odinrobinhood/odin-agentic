@@ -52,7 +52,7 @@ export async function signIn(): Promise<Address> {
     chainId: n.chainId,
     nonce: n.nonce,
     version: '1',
-    statement: 'Sign in to Odin Agentic.',
+    statement: 'Sign in to Odin Robinhood.',
     expirationTime: new Date(n.expiresAt),
   });
   const signature = await signText(address, message);

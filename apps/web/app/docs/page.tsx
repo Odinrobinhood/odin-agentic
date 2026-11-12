@@ -1,4 +1,5 @@
 'use client';
+import { PageHero } from '../motion';
 import { useEffect, useState } from 'react';
 
 type Code = { code: string; area: string; text: string };
@@ -23,7 +24,7 @@ export default function Docs() {
   const areas = [...new Set(codes.map((c) => c.area))];
   return (
     <>
-      <h1>How Odin Agentic works</h1>
+      <PageHero art="/art/knot.jpg" kicker="The lore, made practical" title="How Odin Robinhood works" text="Everything you need to carve a strategy, protect it and read why anything was refused." />
       <div className="panel">
         <ol style={{ margin: 0, paddingLeft: 20 }}>
           {SECTIONS.map(([id, t]) => <li key={id}><a href={`#${id}`}>{t}</a></li>)}
