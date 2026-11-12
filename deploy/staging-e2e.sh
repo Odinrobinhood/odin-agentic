@@ -194,3 +194,7 @@ echo "scripts: $TOTAL, with this request's nonce: $WITH"
 echo "== redesigned web app (Odin Robinhood)"
 echo "public prices: $(curl -s -m 20 http://127.0.0.1:7500/v1/public/prices | jq -c '[.[] | "\(.symbol)=\(.price|floor)"]')"
 echo "landing: $(curl -s -m 20 http://127.0.0.1:3000/ | grep -o -m1 'Odin Robinhood' || echo MISSING)  art: $(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/art/mascot.jpg)  bff prices: $(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/api/public/prices)"
+
+echo "== public entry (Caddy + TLS) =="
+echo "https: $(curl -s -o /dev/null -w '%{http_code}' https://odinrobinhood.com/)  http->https: $(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' http://odinrobinhood.com/)  www: $(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' https://www.odinrobinhood.com/)"
+echo "hsts: $(curl -sI https://odinrobinhood.com/ | grep -i -c '^strict-transport-security')  api not public: $(curl -s -o /dev/null -m 5 -w '%{http_code}' http://odinrobinhood.com:7500/ || echo refused)"

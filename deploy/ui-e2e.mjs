@@ -6,7 +6,8 @@
 import { chromium } from 'playwright';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 
-const BASE = process.env.BASE_URL ?? 'http://127.0.0.1:3000';
+// SIWE signs for the public domain, so the click-through goes through Caddy + TLS like a real visitor.
+const BASE = process.env.BASE_URL ?? 'https://odinrobinhood.com';
 const OUT = process.env.OUT ?? '/tmp/odin-ui';
 const WETH = '0x0bd7d308f8e1639fab988df18a8011f41eacad73';
 const NVDA = '0xd0601ce157db5bdc3162bbac2a2c8af5320d9eec';

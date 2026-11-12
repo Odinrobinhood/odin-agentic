@@ -134,11 +134,24 @@ systemctl daemon-reload
 systemctl enable odin-signals >/dev/null 2>&1
 systemctl restart odin-signals
 
-# --- web app (loopback only; reach it with: ssh -L 3000:127.0.0.1:3000 ubuntu@<host>) --------------
+# --- web app (loopback 127.0.0.1:3000; public only through Caddy) -----------------------------------
 install -m 0644 "$APP/deploy/odin-web.service" /etc/systemd/system/odin-web.service
 systemctl daemon-reload
 systemctl enable odin-web >/dev/null 2>&1
 systemctl restart odin-web
+
+# --- Caddy: TLS reverse proxy for https://odinrobinhood.com (architecture §6) ------------------------
+if ! command -v caddy >/dev/null 2>&1; then
+  apt-get install -y -qq debian-keyring debian-archive-keyring apt-transport-https curl gnupg >/dev/null
+  curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/gpg.key | gpg --dearmor --yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+  curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt > /etc/apt/sources.list.d/caddy-stable.list
+  apt-get update -qq && apt-get install -y -qq caddy >/dev/null
+fi
+install -d -o caddy -g caddy /var/log/caddy
+install -m 0644 "$APP/deploy/Caddyfile" /etc/caddy/Caddyfile
+caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
+systemctl enable caddy >/dev/null 2>&1
+systemctl reload caddy 2>/dev/null || systemctl restart caddy
 
 # --- watchdog + backups (daily dump, weekly restore test) ----------------------------------------
 # services the watchdog expects up: runtime/backtest only once the LLM credential exists
