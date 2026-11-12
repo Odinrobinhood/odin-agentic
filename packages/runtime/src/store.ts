@@ -149,14 +149,16 @@ export class PgRuntimeStore implements RuntimeStore {
       const old = cur.rows[0] ? { qty: BigInt(cur.rows[0].qty), avgEntryPrice: Number(cur.rows[0].avg_entry_price) } : null;
       const next = nextPosition(old, fill, quote, decimals);
       const pos = await client.query<{ id: string }>(
+        // $6 = "position is open" as its own parameter: reusing $4 both as the qty column and in a cast made
+        // Postgres deduce two types for it ("inconsistent types deduced for parameter $4")
         `INSERT INTO positions (agent_id, token_address, mode, qty, avg_entry_price, opened_at)
-         VALUES ($1, $2, $3, $4, $5, CASE WHEN $4::numeric > 0 THEN now() END)
+         VALUES ($1, $2, $3, $4, $5, CASE WHEN $6::boolean THEN now() END)
          ON CONFLICT (agent_id, token_address, mode) DO UPDATE SET qty = EXCLUDED.qty, avg_entry_price = EXCLUDED.avg_entry_price,
            opened_at = CASE WHEN EXCLUDED.qty <= 0 THEN NULL
                             WHEN positions.qty <= 0 OR positions.opened_at IS NULL THEN now()
                             ELSE positions.opened_at END
          RETURNING id`,
-        [agent.agentId, lc(token), agent.mode, next.qty.toString(), next.avgEntryPrice],
+        [agent.agentId, lc(token), agent.mode, next.qty.toString(), next.avgEntryPrice, next.qty > 0n],
       );
       const positionId = pos.rows[0]!.id;
 
