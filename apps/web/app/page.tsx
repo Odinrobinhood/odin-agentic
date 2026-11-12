@@ -35,7 +35,7 @@ const POWERS = [
 const ROADMAP = [
   ['01', 'Public launch', 'live', 'odinrobinhood.com is open to everyone, over HTTPS.'],
   ['02', 'Live trading', 'live', 'Agents trade real funds on Robinhood Chain mainnet — first live trades confirmed on-chain, gas about a cent per trade.'],
-  ['03', 'Security review', 'done', 'Internal review of the signer, withdrawals and key export by three independent reviewers; findings fixed. An external audit is next.'],
+  ['03', 'Security review', 'done', 'Internal review of the signer, withdrawals and key export by three independent reviewers; findings fixed.'],
 ];
 
 const FAQ = [
