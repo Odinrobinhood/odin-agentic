@@ -1,10 +1,9 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { chooseWallet, discoverWallets, rememberedWalletId, signIn, walletErrorText, type SignInStep, type WalletInfo } from '@/lib/client';
+import { chooseWallet, discoverWallets, rememberedWalletId, reportConnect, signIn, walletErrorText, type SignInStep, type WalletInfo } from '@/lib/client';
 
 const STEPS: [SignInStep, string, string][] = [
   ['connect', 'Connect', 'Approve the connection in your wallet.'],
-  ['network', 'Robinhood Chain', 'Allow switching to (or adding) Robinhood Chain. You can skip this.'],
   ['sign', 'Sign in', 'Sign the message. It is free and is not a transaction.'],
   ['verify', 'Verify', 'Checking the signature…'],
 ];
@@ -30,18 +29,23 @@ export default function ConnectDialog({ onSignedIn }: { onSignedIn: () => void }
   const run = useCallback(
     async (w: WalletInfo, all: WalletInfo[]) => {
       chooseWallet(w);
+      let at: SignInStep = 'connect';
       const set = (step: SignInStep) => {
+        at = step;
         if (slowTimer.current) clearTimeout(slowTimer.current);
         setS({ kind: 'working', wallet: w, step, slow: false });
-        if (step !== 'verify') slowTimer.current = setTimeout(() => setS((x) => (x.kind === 'working' && x.step === step ? { ...x, slow: true } : x)), 12_000);
+        if (step !== 'verify') slowTimer.current = setTimeout(() => (reportConnect({ result: 'slow', step, wallet: w.name }), setS((x) => (x.kind === 'working' && x.step === step ? { ...x, slow: true } : x))), 12_000);
       };
       try {
         await signIn(set);
         if (slowTimer.current) clearTimeout(slowTimer.current);
+        reportConnect({ result: 'ok', wallet: w.name, wallets: all.length });
         setS({ kind: 'closed' });
         onSignedIn();
       } catch (e) {
         if (slowTimer.current) clearTimeout(slowTimer.current);
+        const x = e as { code?: unknown; message?: unknown };
+        reportConnect({ result: 'error', step: at, wallet: w.name, wallets: all.length, code: x?.code ?? null, message: String(x?.message ?? e).slice(0, 200) });
         setS({ kind: 'error', wallet: w, text: walletErrorText(e, w.name), wallets: all });
       }
     },
@@ -51,6 +55,8 @@ export default function ConnectDialog({ onSignedIn }: { onSignedIn: () => void }
   const open = useCallback(async () => {
     setS({ kind: 'finding' });
     const all = await discoverWallets();
+    const legacy = !!(globalThis as { ethereum?: unknown }).ethereum;
+    reportConnect({ result: 'opened', wallets: all.map((w) => w.name).join(', ') || '(none)', legacy });
     if (all.length === 0) return setS({ kind: 'none' });
     const remembered = all.find((w) => w.id === rememberedWalletId());
     if (all.length === 1) return run(all[0]!, all);

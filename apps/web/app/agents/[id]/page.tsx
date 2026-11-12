@@ -1,6 +1,6 @@
 'use client';
 import { use, useCallback, useEffect, useState } from 'react';
-import { ApiFailure, availableModels, call, connectedAddress, explorerAddress, explorerTx, fmt, short, signText, units, unusualText, withStepUp } from '@/lib/client';
+import { ApiFailure, availableModels, call, connectedAddress, ensureRobinhoodChain, explorerAddress, explorerTx, fmt, short, signText, units, unusualText, withStepUp } from '@/lib/client';
 
 const AGENT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const odd = <span className="tag warn" title="Contains characters outside plain ASCII, a common trick to imitate a real ticker. Check the address.">unusual characters</span>;
@@ -548,6 +548,7 @@ function Funds({ id, agent }: { id: string; agent: Any }) {
   const [w, setW] = useState({ token: 'native', amount: '' });
   const [paper, setPaper] = useState('1000');
   const [key, setKey] = useState<string | null>(null);
+  const [net, setNet] = useState<string | null>(null);
   const [list, setList] = useState<Any[]>([]);
   const { run, view } = useMsg();
   const load = useCallback(() => call('GET', `/agents/${id}/withdrawals`).then(setList).catch(() => {}), [id]);
@@ -579,6 +580,10 @@ function Funds({ id, agent }: { id: string; agent: Any }) {
         </div>
         <p>Send funds on <b>Robinhood Chain</b> to the agent wallet:</p>
         <p className="mono">{agent.wallet}</p>
+        <div className="row" style={{ marginBottom: 8 }}>
+          <button className="ghost" onClick={() => ensureRobinhoodChain().then((ok) => setNet(ok ? 'Your wallet is on Robinhood Chain.' : 'The wallet did not switch. Add Robinhood Chain manually: chain id 4663, RPC https://rpc.mainnet.chain.robinhood.com'))}>Add Robinhood Chain to my wallet</button>
+          {net && <span className="muted" style={{ fontSize: 13 }}>{net}</span>}
+        </div>
         <p className="muted">Deposit trading capital in the agent&apos;s base asset (USDG, or WETH for an ETH agent) plus a little native ETH for gas. Native ETH is used for gas only.</p>
       </div>
       <div className="panel">

@@ -135,14 +135,14 @@ export async function signText(address: Address, text: string): Promise<`0x${str
   return provider.request({ method: 'personal_sign', params: [toHex(text), address] });
 }
 
-export type SignInStep = 'connect' | 'network' | 'sign' | 'verify';
+export type SignInStep = 'connect' | 'sign' | 'verify';
 
 /** Sign-In With Ethereum. Also used as step-up before withdraw / export / going live. */
 export async function signIn(onStep?: (s: SignInStep) => void): Promise<Address> {
   onStep?.('connect');
   const address = await connectedAddress();
-  onStep?.('network');
-  await ensureRobinhoodChain();
+  // No network switch here: a chain prompt that never shows (seen on Firefox) must not block signing in.
+  // ensureRobinhoodChain() is offered from the Deposit panel instead.
   const nr = await fetch('/api/auth/nonce', { method: 'POST', headers: { 'x-odin': '1' } });
   const n = await nr.json().catch(() => ({}));
   if (!nr.ok || !n.nonce) throw new ApiFailure(n.error ?? { code: 'internal_error', message: `could not start sign-in (HTTP ${nr.status})` });
@@ -163,6 +163,14 @@ export async function signIn(onStep?: (s: SignInStep) => void): Promise<Address>
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new ApiFailure(j.error ?? { code: 'internal_error', message: `HTTP ${r.status}` });
   return getAddress(j.address);
+}
+
+/** Anonymous connect diagnostics (wallet names, step, error code; never addresses or signatures). Best effort. */
+export function reportConnect(event: Record<string, unknown>) {
+  try {
+    const body = JSON.stringify({ ...event, ua: navigator.userAgent.slice(0, 160) });
+    fetch('/api/diag/connect', { method: 'POST', headers: { 'x-odin': '1', 'content-type': 'application/json' }, body, keepalive: true }).catch(() => {});
+  } catch {}
 }
 
 /** Open the connect dialog (rendered once by the app shell). */
