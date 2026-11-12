@@ -149,15 +149,7 @@ export class PgRuntimeStore implements RuntimeStore {
       const old = cur.rows[0] ? { qty: BigInt(cur.rows[0].qty), avgEntryPrice: Number(cur.rows[0].avg_entry_price) } : null;
       const next = nextPosition(old, fill, quote, decimals);
       const pos = await client.query<{ id: string }>(
-        // $6 = "position is open" as its own parameter: reusing $4 both as the qty column and in a cast made
-        // Postgres deduce two types for it ("inconsistent types deduced for parameter $4")
-        `INSERT INTO positions (agent_id, token_address, mode, qty, avg_entry_price, opened_at)
-         VALUES ($1, $2, $3, $4, $5, CASE WHEN $6::boolean THEN now() END)
-         ON CONFLICT (agent_id, token_address, mode) DO UPDATE SET qty = EXCLUDED.qty, avg_entry_price = EXCLUDED.avg_entry_price,
-           opened_at = CASE WHEN EXCLUDED.qty <= 0 THEN NULL
-                            WHEN positions.qty <= 0 OR positions.opened_at IS NULL THEN now()
-                            ELSE positions.opened_at END
-         RETURNING id`,
+        POSITION_UPSERT_SQL,
         [agent.agentId, lc(token), agent.mode, next.qty.toString(), next.avgEntryPrice, next.qty > 0n],
       );
       const positionId = pos.rows[0]!.id;
@@ -215,6 +207,19 @@ export class PgRuntimeStore implements RuntimeStore {
     );
   }
 }
+
+/**
+ * Book a position after a fill: params (agent, token, mode, qty, avg entry, is_open). opened_at is set when the
+ * position goes from closed to open and cleared when it closes. $6 is its own parameter: reusing $4 both as the
+ * qty value and in a cast made Postgres deduce two types for it, which broke live booking (test: store.pg.test.ts).
+ */
+export const POSITION_UPSERT_SQL = `INSERT INTO positions (agent_id, token_address, mode, qty, avg_entry_price, opened_at)
+  VALUES ($1, $2, $3, $4, $5, CASE WHEN $6::boolean THEN now() END)
+  ON CONFLICT (agent_id, token_address, mode) DO UPDATE SET qty = EXCLUDED.qty, avg_entry_price = EXCLUDED.avg_entry_price,
+    opened_at = CASE WHEN EXCLUDED.qty <= 0 THEN NULL
+                     WHEN positions.qty <= 0 OR positions.opened_at IS NULL THEN now()
+                     ELSE positions.opened_at END
+  RETURNING id, qty::text AS qty, opened_at`;
 
 /** Paper balances: the paper ledger in `positions` (mode = paper). No gas in paper mode. */
 export class PgPaperBalances implements BalanceReader {
