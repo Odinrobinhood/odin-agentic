@@ -35,7 +35,7 @@ const POWERS = [
 const ROADMAP = [
   ['01', 'Public launch', 'live', 'odinrobinhood.com is open to everyone, over HTTPS.'],
   ['02', 'Live trading', 'live', 'Agents trade real funds on Robinhood Chain mainnet — first live trades confirmed on-chain, gas about a cent per trade.'],
-  ['03', 'External security audit', 'planned', 'An independent review of the signer, withdrawals and key export.'],
+  ['03', 'Security review', 'done', 'Internal review of the signer, withdrawals and key export by three independent reviewers; findings fixed. An external audit is next.'],
 ];
 
 const FAQ = [
@@ -47,7 +47,7 @@ const FAQ = [
   ['What happens if the AI is down?', 'The agent holds and takes no new trades. Take-profit and stop-loss keep running on their own service.'],
 ];
 
-const statusTone = (s: string) => (s === 'available' || s === 'live' ? 'good' : s === 'beta' || s === 'in testing' ? 'warn' : '');
+const statusTone = (s: string) => (s === 'available' || s === 'live' || s === 'done' ? 'good' : s === 'beta' || s === 'in testing' ? 'warn' : '');
 
 export default function Landing() {
   const [signedIn, setSignedIn] = useState(false);
