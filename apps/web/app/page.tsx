@@ -87,7 +87,7 @@ export default function Landing() {
               You carve the strategy. Your agent trades any token on Robinhood Chain. Your take-profit and stop-loss stand guard — and the AI can never touch them.
             </p>
             <div className="row" style={{ gap: 12 }}>
-              <button className="hero" onClick={go} disabled={busy}>{cta}</button>
+              <button className="hero arrow" onClick={go} disabled={busy}>{cta}</button>
               <a href="#how" className="btn-link">See how it works</a>
             </div>
             {err && <p className="error" style={{ margin: 0 }}>{err}</p>}
@@ -277,7 +277,7 @@ export default function Landing() {
             <span className="kicker">the seat is open</span>
             <h2 className="display" style={{ margin: 0, fontSize: 'clamp(42px, 6.4vw, 92px)' }}>See everything.<br /><span style={{ color: 'var(--rune)' }}>Decide with discipline.</span></h2>
             <div className="row" style={{ gap: 12, justifyContent: 'center' }}>
-              <button className="hero" onClick={go} disabled={busy}>{cta}</button>
+              <button className="hero arrow" onClick={go} disabled={busy}>{cta}</button>
               <Link href="/docs" className="btn-link">Read the docs</Link>
             </div>
           </div>

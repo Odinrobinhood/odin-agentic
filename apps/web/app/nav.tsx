@@ -59,15 +59,18 @@ export default function AppShell({ children }: { children: ReactNode }) {
         <header className="topbar">
           <Link href="/" className="crumb" aria-label="Home">odin / <b>_{crumb}</b></Link>
           <span style={{ flex: 1 }} />
-          <span className="chip"><span className="live-dot" />Robinhood Chain</span>
+          <span className="chip mono" style={{ fontSize: 12 }}><span className="live-dot" />Robinhood Chain · 4663</span>
           {me ? (
-            <>
-              <span className="chip mono" title={me.address}>{short(me.address)}</span>
-              <button className="ghost" onClick={() => logout(false)}>Log out</button>
-              <button className="ghost" onClick={() => logout(true)} title="Ends every session of this wallet">Everywhere</button>
-            </>
+            <div className="wallet on">
+              <span className="state" title={me.address}><i />{short(me.address)}</span>
+              <button onClick={() => logout(false)}>Log out</button>
+              <button onClick={() => logout(true)} title="Ends every session of this wallet">All devices</button>
+            </div>
           ) : me === null ? (
-            <button onClick={connect} disabled={busy}>{busy ? 'Check your wallet…' : 'Connect wallet'}</button>
+            <div className="wallet">
+              <span className="state"><i />{busy ? 'Waiting for wallet…' : 'Not connected'}</span>
+              <button onClick={connect} disabled={busy}>Connect</button>
+            </div>
           ) : null}
         </header>
         {children}

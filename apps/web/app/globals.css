@@ -127,17 +127,35 @@ label { display: block; color: var(--soft); font-size: 13px; margin-bottom: 6px;
 input, select, textarea { width: 100%; background: #0b0b0b; color: var(--ink); border: 1px solid var(--line-strong); border-radius: var(--radius); padding: 10px 12px; font: inherit; transition: border-color 0.2s, box-shadow 0.2s; }
 input:focus, select:focus, textarea:focus { outline: none; border-color: var(--rune); box-shadow: 0 0 0 3px rgba(70, 242, 155, 0.14); }
 textarea { min-height: 130px; resize: vertical; }
-button { min-height: 40px; background: var(--rune); color: var(--rune-ink); border: 1px solid var(--rune); border-radius: var(--radius); padding: 8px 18px; font: inherit; font-weight: 600; cursor: pointer; transition: background 0.2s, color 0.2s, border-color 0.2s, transform 0.12s; }
-button:hover { background: #7cf7b9; border-color: #7cf7b9; }
-button:active { transform: translateY(1px); }
-button.ghost { background: transparent; color: var(--ink); border-color: var(--line-strong); }
-button.ghost:hover { border-color: var(--ink); background: var(--surface-3); }
-button.danger { background: transparent; color: var(--ember); border-color: #7a4436; }
-button.danger:hover { border-color: var(--ember); background: rgba(255, 138, 110, 0.08); }
-button.hero { min-height: 50px; padding: 0 26px; font-size: 16px; }
-button:disabled { opacity: 0.45; cursor: default; transform: none; }
-.btn-link { display: inline-flex; align-items: center; gap: 10px; min-height: 50px; padding: 0 24px; border-radius: var(--radius); border: 1px solid var(--line-strong); color: var(--ink); font-weight: 600; background: transparent; }
-.btn-link:hover { border-color: var(--ink); color: var(--ink); background: var(--surface-3); }
+/* Buttons are ink, not accent: green is reserved for status and gains. Square-ish, quiet, one arrow cue. */
+button { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 40px; background: var(--ink); color: #0b0b0b; border: 1px solid var(--ink); border-radius: 4px; padding: 0 16px; font: inherit; font-size: 14px; font-weight: 600; letter-spacing: -0.005em; cursor: pointer; transition: background 0.18s, color 0.18s, border-color 0.18s; }
+button:hover { background: #ffffff; border-color: #ffffff; }
+button:active { background: #d9d9d4; }
+button.ghost { background: transparent; color: var(--ink); border-color: var(--line-strong); font-weight: 500; }
+button.ghost:hover { border-color: #8a8a8a; background: transparent; }
+button.quiet { background: transparent; border-color: transparent; color: var(--muted); font-weight: 500; padding: 0 8px; }
+button.quiet:hover { color: var(--ink); background: transparent; border-color: transparent; }
+button.danger { background: transparent; color: var(--ember); border-color: #5c3a31; font-weight: 500; }
+button.danger:hover { border-color: var(--ember); background: transparent; }
+button.hero { min-height: 48px; padding: 0 20px; font-size: 15px; }
+button:disabled { opacity: 0.4; cursor: default; }
+/* trailing arrow that nudges on hover: add class="arrow" */
+.arrow::after { content: '→'; font-family: var(--font-mono); font-weight: 400; transition: transform 0.2s ease; }
+.arrow:hover::after { transform: translateX(3px); }
+.btn-link { display: inline-flex; align-items: center; gap: 10px; min-height: 48px; padding: 0 4px; border: 0; border-bottom: 1px solid var(--line-strong); border-radius: 0; color: var(--ink); font-size: 15px; font-weight: 500; background: transparent; }
+.btn-link:hover { border-color: var(--ink); color: var(--ink); }
+
+/* wallet control: a status readout, not a call-to-action blob */
+.wallet { display: inline-flex; align-items: stretch; min-height: 36px; border: 1px solid var(--line-strong); border-radius: 4px; background: var(--surface); font-size: 13px; overflow: hidden; }
+.wallet > span, .wallet > button { display: inline-flex; align-items: center; gap: 8px; padding: 0 12px; min-height: 34px; }
+.wallet .state { color: var(--muted); font-family: var(--font-mono); font-size: 12px; }
+.wallet .state i { width: 7px; height: 7px; border-radius: 50%; border: 1px solid #6f6f6f; }
+.wallet.on .state i { border-color: var(--rune); background: var(--rune); }
+.wallet.on .state { color: var(--ink); }
+.wallet > button { border: 0; border-left: 1px solid var(--line-strong); border-radius: 0; background: transparent; color: var(--ink); font-size: 13px; font-weight: 600; min-height: 34px; }
+.wallet > button:hover { background: var(--surface-3); }
+.wallet:hover .state i { border-color: var(--ink); }
+.wallet.on:hover .state i { border-color: var(--rune); }
 .textlink { color: var(--ink); border-bottom: 1px solid var(--line-strong); padding-bottom: 2px; }
 .textlink:hover { border-color: var(--rune); color: var(--rune); }
 

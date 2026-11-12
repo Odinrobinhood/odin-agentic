@@ -51,7 +51,7 @@ export default function Agents() {
               <label htmlFor="new-agent">Name a new warrior</label>
               <input id="new-agent" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Stock dip buyer" />
             </div>
-            <button className="hero" type="submit" disabled={!name.trim() || busy} style={{ alignSelf: 'flex-end', minHeight: 46, fontSize: 15, padding: '0 24px' }}>{busy ? 'Summoning…' : '✦ Summon'}</button>
+            <button className="arrow" type="submit" disabled={!name.trim() || busy} style={{ alignSelf: 'flex-end', minHeight: 44 }}>{busy ? 'Creating…' : 'Create agent'}</button>
           </form>
         </div>
       </section>
