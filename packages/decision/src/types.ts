@@ -31,12 +31,29 @@ export const DecisionSchema = z
 export type Decision = z.infer<typeof DecisionSchema>;
 
 /** JSON schema sent as the structured-output format (mirrors DecisionSchema). */
+/**
+ * JSON schema sent as the structured-output format (mirrors DecisionSchema). Property ORDER matters: models emit the
+ * fields in this order, so the rationale and thesis come first and the action that follows from them comes after.
+ * (With action first, a live-trial decision reasoned "the position is 6 minutes old, I will output hold" and then
+ * kept the "sell" it had already written.)
+ */
 export const DECISION_JSON_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['action', 'token', 'size', 'rationale', 'thesis', 'confidence'],
+  required: ['rationale', 'thesis', 'action', 'token', 'size', 'confidence'],
   properties: {
-    action: { type: 'string', enum: ['buy', 'sell', 'hold'] },
+    rationale: { type: 'string', description: 'Reason through the mandate and the state first. The action below must follow from this.' },
+    thesis: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['claim', 'horizon_ticks', 'invalidated_if'],
+      properties: {
+        claim: { type: 'string' },
+        horizon_ticks: { type: 'integer' },
+        invalidated_if: { type: 'string' },
+      },
+    },
+    action: { type: 'string', enum: ['buy', 'sell', 'hold'], description: 'The action your rationale concluded.' },
     token: { type: ['string', 'null'], description: 'Contract address from allowed_assets; null when action is hold.' },
     size: {
       anyOf: [
@@ -51,17 +68,6 @@ export const DECISION_JSON_SCHEMA = {
           },
         },
       ],
-    },
-    rationale: { type: 'string' },
-    thesis: {
-      type: 'object',
-      additionalProperties: false,
-      required: ['claim', 'horizon_ticks', 'invalidated_if'],
-      properties: {
-        claim: { type: 'string' },
-        horizon_ticks: { type: 'integer' },
-        invalidated_if: { type: 'string' },
-      },
     },
     confidence: { type: 'number' },
   },

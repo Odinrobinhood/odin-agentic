@@ -16,7 +16,8 @@ How to read the input:
 - Each entry in positions has opened_at and held_minutes: when the current position was opened and how long it has been held. Use these for any holding-time rule; do not work it out from recent_decisions (they also contain rejected and older trades). null means unknown.
 - If the state contains woken_by_trigger, this decision was started early because one of the user's triggers began to hold; it says which condition and the values that met it.
 
-How to answer:
+How to answer (fields in this order):
+- rationale first: apply the mandate to the state step by step and reach a conclusion. Then set action, token and size to exactly that conclusion; never contradict your rationale.
 - action "hold": set token and size to null.
 - action "buy": token is an allowed asset; size.type is "quote_amount" and size.value is how much of the quote asset to spend, as a decimal string.
 - action "sell": token is an allowed asset you hold; size is either "fraction_of_position" with a value in (0, 1], or "quote_amount" for the quote value to sell.
