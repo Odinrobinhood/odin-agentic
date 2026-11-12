@@ -81,7 +81,7 @@ console.log('-- portfolio:', JSON.stringify({ valueUsdg: Math.round(pf.valueUsdg
 show('-- alert price_below 100000:', await call('POST', '/v1/alerts', { rule: { condition: 'price_below', token: process.env.CHAIN_WETH, price: 100000 }, channels: [], cooldownSeconds: 3600 }, t));
 show('-- alert wallet_activity pool:', await call('POST', '/v1/alerts', { rule: { condition: 'wallet_activity', address: '0x52e65b17fb6e5ba00ed806f37afcd2daa50271ca' }, channels: [], cooldownSeconds: 60 }, t));
 show('-- bad alert (not a condition):', await call('POST', '/v1/alerts', { rule: { condition: 'buy', token: process.env.CHAIN_WETH } }, t));
-show('-- signal profile:', await call('POST', '/v1/signals/profiles', { mandate: 'Flag strong 1h momentum.', model, tokens: [process.env.CHAIN_WETH], cadenceSeconds: 3600, channels: [] }, t));
+show('-- signal profile:', await call('POST', '/v1/signals/profiles', { mandate: 'Flag strong 1h momentum.', model, tokens: [process.env.CHAIN_WETH], cadenceSeconds: 3600, channels: [], enabled: false }, t));
 await new Promise((r) => setTimeout(r, 35_000));
 const profs = (await call('GET', '/v1/signals/profiles', undefined, t)).body as unknown as { last_error: string | null; last_run_at: string | null }[];
 console.log('-- signal profile run:', JSON.stringify(profs.map((p) => ({ ran: !!p.last_run_at, last_error: p.last_error }))));
