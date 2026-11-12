@@ -149,7 +149,9 @@ if ! command -v caddy >/dev/null 2>&1; then
 fi
 install -d -o caddy -g caddy /var/log/caddy
 install -m 0644 "$APP/deploy/Caddyfile" /etc/caddy/Caddyfile
-caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
+# syntax check only: `caddy validate` would open the log file as root and lock out the caddy user
+caddy adapt --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
+chown -R caddy:caddy /var/log/caddy
 systemctl enable caddy >/dev/null 2>&1
 systemctl reload caddy 2>/dev/null || systemctl restart caddy
 
