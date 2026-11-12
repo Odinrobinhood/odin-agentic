@@ -2,7 +2,8 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
-import { call, short, signIn } from '@/lib/client';
+import { call, openConnect, short } from '@/lib/client';
+import ConnectDialog from './connect';
 
 const GROUPS: { title: string; links: [string, string][] }[] = [
   { title: 'Trade', links: [['/agents', 'Agents'], ['/alerts', 'Signals & alerts']] },
@@ -16,21 +17,13 @@ const TABS: [string, string][] = [['/agents', 'Agents'], ['/analyst', 'Analyst']
 export default function AppShell({ children }: { children: ReactNode }) {
   const path = usePathname();
   const [me, setMe] = useState<{ address: string } | null | undefined>(undefined);
-  const [busy, setBusy] = useState(false);
   useEffect(() => {
     call('GET', '/me').then(setMe).catch(() => setMe(null));
   }, [path]);
   const on = (href: string) => (path === href || path.startsWith(`${href}/`) ? 'on' : '');
   const crumb = path === '/' ? 'home' : path.split('/').filter(Boolean)[0];
-  const connect = async () => {
-    setBusy(true);
-    try {
-      await signIn();
-      location.href = '/agents';
-    } catch {
-      setBusy(false);
-    }
-  };
+  // after sign-in: from the landing page go to the agents, elsewhere reload the page that asked
+  const signedIn = () => (path === '/' ? (location.href = '/agents') : location.reload());
   const logout = async (all: boolean) => {
     await fetch(`/api/auth/logout${all ? '?all=1' : ''}`, { method: 'POST', headers: { 'x-odin': '1' } });
     location.href = '/';
@@ -68,13 +61,14 @@ export default function AppShell({ children }: { children: ReactNode }) {
             </div>
           ) : me === null ? (
             <div className="wallet">
-              <span className="state"><i />{busy ? 'Waiting for wallet…' : 'Not connected'}</span>
-              <button onClick={connect} disabled={busy}>Connect</button>
+              <span className="state"><i />Not connected</span>
+              <button onClick={openConnect}>Connect</button>
             </div>
           ) : null}
         </header>
         {children}
       </div>
+      <ConnectDialog onSignedIn={signedIn} />
       <nav className="bottom-tabs" aria-label="Tabs">
         {TABS.map(([href, label]) => (
           <Link key={href} href={href} className={on(href)}>{label}</Link>

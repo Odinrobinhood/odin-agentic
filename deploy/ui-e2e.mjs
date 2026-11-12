@@ -33,12 +33,22 @@ async function newPage(viewport) {
   await page.exposeFunction('__odinWallet', async (method, params) => {
     if (method === 'eth_requestAccounts' || method === 'eth_accounts') return [account.address];
     if (method === 'eth_chainId') return '0x1237';
-    if (method === 'personal_sign') return account.signMessage({ message: params[0] });
+    if (method === 'personal_sign') return account.signMessage({ message: /^0x[0-9a-f]*$/i.test(params[0]) ? { raw: params[0] } : params[0] });
     if (method === 'wallet_switchEthereumChain') return null;
     throw new Error(`unsupported wallet method ${method}`);
   });
+  // Two wallet extensions announce themselves over EIP-6963, like a real browser with MetaMask + another wallet:
+  // "Test Wallet" signs with the throwaway key, "Grumpy Wallet" declines every request (EIP-1193 code 4001).
   await page.addInitScript(() => {
-    window.ethereum = { isMetaMask: true, request: ({ method, params }) => window.__odinWallet(method, params ?? []), on() {}, removeListener() {} };
+    const good = { isMetaMask: true, request: ({ method, params }) => window.__odinWallet(method, params ?? []), on() {}, removeListener() {} };
+    const bad = { request: async () => { throw Object.assign(new Error('User rejected the request.'), { code: 4001 }); }, on() {}, removeListener() {} };
+    window.ethereum = good;
+    const announce = () => {
+      for (const [provider, name, rdns] of [[bad, 'Grumpy Wallet', 'test.grumpy'], [good, 'Test Wallet', 'test.good']]) {
+        window.dispatchEvent(new CustomEvent('eip6963:announceProvider', { detail: Object.freeze({ info: { uuid: rdns, name, rdns, icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg"/>' }, provider }) }));
+      }
+    };
+    window.addEventListener('eip6963:requestProvider', announce);
   });
   page.on('console', (m) => m.type() === 'error' && problems.push({ kind: 'console', page: page.url(), text: m.text().slice(0, 300) }));
   page.on('pageerror', (e) => problems.push({ kind: 'pageerror', page: page.url(), text: String(e.message).slice(0, 300) }));
@@ -67,8 +77,15 @@ await step('landing renders', async () => {
   if (!film || film.paused || film.t <= 0) throw new Error(`hero film not playing: ${JSON.stringify(film)}`);
   await shot(page, '01-landing');
 });
-await step('connect wallet (SIWE)', async () => {
+await step('connect: declined wallet shows a clear error, another wallet signs in (SIWE)', async () => {
   await page.getByRole('button', { name: 'Connect', exact: true }).click();
+  await page.getByRole('dialog').getByText('Choose a wallet').waitFor({ timeout: 10_000 });
+  await shot(page, '02a-connect-pick', false);
+  await page.getByRole('button', { name: 'Grumpy Wallet' }).click();
+  await page.getByRole('dialog').getByText('declined in Grumpy Wallet').waitFor({ timeout: 10_000 });
+  await shot(page, '02b-connect-declined', false);
+  await page.getByRole('button', { name: 'Use another wallet' }).click();
+  await page.getByRole('button', { name: 'Test Wallet' }).click();
   await page.waitForURL('**/agents', { timeout: 30_000 });
   await page.waitForTimeout(800);
   await shot(page, '02-agents-empty');

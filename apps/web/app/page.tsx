@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { call, signIn } from '@/lib/client';
+import { call, openConnect } from '@/lib/client';
 import { Reveal, Ticker, TypeConsole, usePrices, type ConsoleLine } from './motion';
 
 const CONSOLE: ConsoleLine[] = [
@@ -50,27 +50,13 @@ const FAQ = [
 const statusTone = (s: string) => (s === 'available' ? 'good' : s === 'beta' || s === 'in testing' ? 'warn' : '');
 
 export default function Landing() {
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
   const [signedIn, setSignedIn] = useState(false);
   const prices = usePrices();
   useEffect(() => {
     call('GET', '/me').then(() => setSignedIn(true)).catch(() => setSignedIn(false));
   }, []);
-  const go = async () => {
-    if (signedIn) return void (location.href = '/agents');
-    setBusy(true);
-    setErr(null);
-    try {
-      await signIn();
-      location.href = '/agents';
-    } catch (e) {
-      setErr((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-  const cta = busy ? 'Check your wallet…' : signedIn ? 'Open your agents' : 'Summon an agent';
+  const go = () => (signedIn ? void (location.href = '/agents') : openConnect());
+  const cta = signedIn ? 'Open your agents' : 'Summon an agent';
   const lead = prices[0];
 
   return (
@@ -95,10 +81,9 @@ export default function Landing() {
               You carve the strategy. Your agent trades any token on Robinhood Chain. Your take-profit and stop-loss stand guard — and the AI can never touch them.
             </p>
             <div className="row" style={{ gap: 12 }}>
-              <button className="hero arrow" onClick={go} disabled={busy}>{cta}</button>
+              <button className="hero arrow" onClick={go}>{cta}</button>
               <a href="#how" className="btn-link">See how it works</a>
             </div>
-            {err && <p className="error" style={{ margin: 0 }}>{err}</p>}
             <div className="readout">
               <span className="kicker">readout / {lead ? lead.symbol.toLowerCase() : 'market'}</span>
               <strong className="num">{lead ? lead.price.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '—'}</strong>
@@ -288,7 +273,7 @@ export default function Landing() {
             <span className="kicker">the seat is open</span>
             <h2 className="display" style={{ margin: 0, fontSize: 'clamp(42px, 6.4vw, 92px)' }}>See everything.<br /><span style={{ color: 'var(--rune)' }}>Decide with discipline.</span></h2>
             <div className="row" style={{ gap: 12, justifyContent: 'center' }}>
-              <button className="hero arrow" onClick={go} disabled={busy}>{cta}</button>
+              <button className="hero arrow" onClick={go}>{cta}</button>
               <Link href="/docs" className="btn-link">Read the docs</Link>
             </div>
           </div>

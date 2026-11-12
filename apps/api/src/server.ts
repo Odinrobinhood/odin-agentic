@@ -110,7 +110,13 @@ export function buildServer(d: ApiDeps): FastifyInstance {
   app.post('/v1/auth/nonce', { preHandler: ipLimited }, async () => d.auth.nonce());
   app.post('/v1/auth/verify', { preHandler: ipLimited }, async (req) => {
     const b = parse(z.object({ message: z.string().max(4000), signature: z.string().regex(/^0x[0-9a-fA-F]+$/) }).strict(), req.body);
-    return d.auth.login(b.message, b.signature as Hex, req.headers['user-agent']);
+    try {
+      return await d.auth.login(b.message, b.signature as Hex, req.headers['user-agent']);
+    } catch (e) {
+      // why a sign-in failed (no address, message or signature): lets the operator tell wallet problems from scanners
+      if (e instanceof Rejection) console.log(JSON.stringify({ msg: 'siwe rejected', reason: e.message, sigBytes: (b.signature.length - 2) / 2 }));
+      throw e;
+    }
   });
   app.post('/v1/auth/refresh', { preHandler: ipLimited }, async (req) => {
     const b = parse(z.object({ refreshToken: z.string().min(20).max(200) }).strict(), req.body);
