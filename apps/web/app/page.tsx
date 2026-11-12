@@ -91,6 +91,12 @@ export default function Landing() {
               {lead && lead.changePct !== null && <span className="num" style={{ color: lead.changePct >= 0 ? 'var(--rune)' : 'var(--ember)', fontSize: 13 }}>{lead.changePct >= 0 ? '+' : '−'}{Math.abs(lead.changePct).toFixed(2)}% · 24h</span>}
               <span className="row mono" style={{ gap: 8, fontSize: 12, color: 'var(--rune)', marginLeft: 'auto' }}><span className="live-dot" />agents online</span>
             </div>
+            <div style={{ maxWidth: 560, display: 'flex', flexDirection: 'column', gap: 6, padding: '4px 0 0 16px', borderLeft: '2px solid var(--rune)' }}>
+              <span className="kicker"><b>the omen</b> · may 27</span>
+              <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.55, color: 'var(--soft)' }}>
+                Robinhood announced Agentic Trading and promised “new AI-powered products … geared toward the everyday investor.” Weeks later <span className="mono" style={{ fontSize: 12.5, color: 'var(--ink)' }}>odin.robinhood.com</span> and <span className="mono" style={{ fontSize: 12.5, color: 'var(--ink)' }}>ai-agent.robinhood.com</span> were registered <b style={{ color: 'var(--rune)', fontWeight: 500 }}>five seconds apart</b>. No other subdomain that week — except <span className="mono" style={{ fontSize: 12.5, color: 'var(--ink)' }}>ad.robinhood.com</span>, which does not resolve at all.
+              </p>
+            </div>
           </div>
         </div>
       </section>
