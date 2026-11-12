@@ -1,18 +1,14 @@
 import type { ReactNode } from 'react';
 import { headers } from 'next/headers';
-import Nav from './nav';
+import AppShell from './nav';
 // fonts bundled from npm (@fontsource): served from this origin, no font CDN, CSP stays 'self'
-import '@fontsource/cinzel/600.css';
-import '@fontsource/cinzel/800.css';
+import '@fontsource/dm-sans/400.css';
+import '@fontsource/dm-sans/500.css';
+import '@fontsource/dm-sans/600.css';
+import '@fontsource/dm-sans/700.css';
 import '@fontsource/cinzel/900.css';
-import '@fontsource/inter/400.css';
-import '@fontsource/inter/500.css';
-import '@fontsource/inter/600.css';
-import '@fontsource/inter/700.css';
 import '@fontsource/jetbrains-mono/400.css';
-import '@fontsource/jetbrains-mono/700.css';
 import './globals.css';
-
 
 export const metadata = {
   title: 'Odin Robinhood',
@@ -25,8 +21,8 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   return (
     <html lang="en">
       <body>
-        <Nav />
-        {children}
+        <div className="atmosphere" aria-hidden="true" />
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );

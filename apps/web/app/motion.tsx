@@ -86,15 +86,12 @@ export function TypeConsole({ title, lines }: { title: string; lines: ConsoleLin
   }, [line, chars, lines]);
   const color = { muted: 'var(--muted)', rune: 'var(--rune)', gold: 'var(--gold)', ember: 'var(--ember)', win: 'var(--rune)' } as const;
   return (
-    <div className="console" style={{ borderRadius: 20, border: '1px solid rgba(70,242,155,0.45)', background: 'linear-gradient(180deg,#0a1913,#06100b)', boxShadow: '0 40px 120px -30px rgba(70,242,155,0.45)', overflow: 'hidden' }}>
+    <div className="console" style={{ borderRadius: 'var(--radius)', border: '1px solid var(--line-strong)', background: '#111', overflow: 'hidden' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '14px 18px', borderBottom: '1px solid var(--line)' }}>
-        <span style={{ width: 11, height: 11, borderRadius: '50%', background: 'var(--ember)' }} />
-        <span style={{ width: 11, height: 11, borderRadius: '50%', background: 'var(--gold)' }} />
-        <span style={{ width: 11, height: 11, borderRadius: '50%', background: 'var(--rune)' }} />
-        <span className="mono" style={{ marginLeft: 10, color: 'var(--muted)' }}>{title}</span>
+        <span className="mono" style={{ color: 'var(--muted)', fontSize: 12.5 }}>{title}</span>
         <span className="mono" style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 8, color: 'var(--rune)', fontSize: 12 }}><span className="live-dot" />LIVE</span>
       </div>
-      <div className="mono" style={{ padding: '20px 22px', fontSize: 14.5, lineHeight: 1.9, minHeight: 330 }}>
+      <div className="mono" style={{ padding: '18px 20px', fontSize: 13.5, lineHeight: 1.95, minHeight: 300 }}>
         {lines.map((l, i) =>
           i < line || (i === line && chars > 0) ? (
             <div key={i} style={{ color: l.tone ? color[l.tone] : 'var(--soft)', fontWeight: l.tone === 'win' ? 700 : 400 }}>
@@ -108,10 +105,10 @@ export function TypeConsole({ title, lines }: { title: string; lines: ConsoleLin
   );
 }
 
-type Price = { symbol: string; price: number; changePct: number | null };
+export type Price = { symbol: string; price: number; changePct: number | null; asOf?: string };
 
-/** Scrolling tape of real Robinhood Chain prices from the public API. Renders nothing until data arrives. */
-export function Ticker() {
+/** Latest public prices (refreshes every minute). */
+export function usePrices(): Price[] {
   const [prices, setPrices] = useState<Price[]>([]);
   useEffect(() => {
     const load = () => fetch('/api/public/prices').then((r) => (r.ok ? r.json() : [])).then(setPrices).catch(() => {});
@@ -119,32 +116,37 @@ export function Ticker() {
     const t = setInterval(load, 60_000);
     return () => clearInterval(t);
   }, []);
+  return prices;
+}
+
+/** Scrolling tape of real Robinhood Chain prices from the public API. Renders nothing until data arrives. */
+export function Ticker() {
+  const prices = usePrices();
   if (prices.length === 0) return null;
   const item = (p: Price, k: string) => (
-    <span key={k} className="mono" style={{ fontSize: 15 }}>
+    <span key={k} className="mono" style={{ fontSize: 14, color: 'var(--muted)' }}>
       {p.symbol} <b style={{ color: 'var(--text-hi)' }}>{p.price.toLocaleString('en-US', { maximumFractionDigits: p.price < 10 ? 4 : 2 })}</b>{' '}
       {p.changePct !== null && <span style={{ color: p.changePct >= 0 ? 'var(--rune)' : 'var(--ember)' }}>{p.changePct >= 0 ? '▲' : '▼'} {Math.abs(p.changePct).toFixed(2)}%</span>}
     </span>
   );
   return (
-    <section aria-label="Robinhood Chain prices" style={{ borderTop: '1px solid rgba(70,242,155,0.25)', borderBottom: '1px solid rgba(70,242,155,0.25)', background: '#07120d', overflow: 'hidden' }}>
-      <div style={{ display: 'flex', width: 'max-content', gap: 48, padding: '15px 0', whiteSpace: 'nowrap', animation: 'marquee 40s linear infinite' }}>
+    <section aria-label="Robinhood Chain prices" className="marquee" style={{ borderTop: '1px solid var(--line)', borderBottom: '1px solid var(--line)' }}>
+      <div style={{ padding: '16px 0', whiteSpace: 'nowrap' }}>
         {[...prices, ...prices].map((p, i) => item(p, `${p.symbol}-${i}`))}
       </div>
     </section>
   );
 }
 
-/** Page header: lore art behind a title, with a slow zoom and drifting embers. */
+/** Page header: grayscale lore art behind a title (warms to color on hover), with a slow zoom. */
 export function PageHero({ art, kicker, title, text, children }: { art: string; kicker: string; title: string; text?: string; children?: ReactNode }) {
   return (
     <section className="hero-banner" style={{ minHeight: 220 }}>
       <img className="zoomin" src={art} alt="" aria-hidden="true" />
-      <Embers count={8} />
       <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-end', gap: 20 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 640 }}>
           <span className="eyebrow">{kicker}</span>
-          <h1 style={{ margin: 0, fontSize: 'clamp(34px, 5vw, 54px)' }}>{title}</h1>
+          <h1 style={{ margin: 0, fontSize: 'clamp(34px, 4.6vw, 52px)' }}>{title}</h1>
           {text && <p style={{ margin: 0, color: 'var(--soft)' }}>{text}</p>}
         </div>
         {children}

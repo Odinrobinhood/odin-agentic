@@ -75,7 +75,7 @@ export default function Agents() {
         {active.map((a) => (
           <Link key={a.id} href={`/agents/${a.id}`} className="card lift" style={{ padding: 0, overflow: 'hidden', color: 'var(--text)', display: 'flex', flexDirection: 'column' }}>
             <div style={{ position: 'relative', height: 130, overflow: 'hidden' }}>
-              <img src={art(a.id)} alt="" aria-hidden="true" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <img className="art" src={art(a.id)} alt="" aria-hidden="true" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
               <div aria-hidden="true" style={{ position: 'absolute', inset: 0, background: 'linear-gradient(0deg, rgba(7,16,12,1) 0%, transparent 70%)' }} />
             </div>
             <div style={{ padding: '4px 20px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
