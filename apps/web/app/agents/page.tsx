@@ -65,7 +65,7 @@ export default function Agents() {
 
       {agents !== null && active.length === 0 && (
         <div className="panel" style={{ textAlign: 'center', padding: 48 }}>
-          <img src="/art/shield.jpg" alt="" aria-hidden="true" style={{ width: 220, borderRadius: 16, opacity: 0.85 }} />
+          <img src="/art/medal.webp" alt="" aria-hidden="true" className="medal-big" style={{ width: 160, height: 160 }} />
           <h2 style={{ marginTop: 18 }}>No warriors yet</h2>
           <p className="muted">Name one above. It starts in paper mode — real prices, simulated money.</p>
         </div>

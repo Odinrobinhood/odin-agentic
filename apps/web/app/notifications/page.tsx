@@ -38,7 +38,7 @@ export default function Notifications() {
   };
   return (
     <>
-      <PageHero art="/art/ravens.jpg" kicker="Messages from the ravens" title="Notifications" text="Trades, take-profit and stop-loss exits, failed exits, low gas, alerts and signals." />
+      <PageHero art="/art/eye.jpg" icon="/art/medal.webp" kicker="Messages from the ravens" title="Notifications" text="Trades, take-profit and stop-loss exits, failed exits, low gas, alerts and signals." />
       <div className="panel row">
         <p className="muted" style={{ flex: 1, margin: 0 }}>Alerts, signals, trades and TP/SL exits appear here (in-app only).</p>
         <button className="ghost" onClick={() => run(() => call('POST', '/notifications/test', {}), 'Test queued')}>Send test</button>

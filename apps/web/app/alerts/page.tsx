@@ -56,7 +56,7 @@ export default function Alerts() {
     run(() => call('POST', '/signals/profiles', { mandate: prof.mandate, model: prof.model, tokens: prof.tokens.split(/[\s,]+/).filter(Boolean), cadenceSeconds: Number(prof.cadenceSeconds) }), 'Signal profile created');
   return (
     <>
-      <PageHero art="/art/ravens.jpg" kicker="Huginn &amp; Muninn" title="Signals & alerts" text="Huginn thinks: AI signals on your schedule. Muninn remembers: rule alerts the moment a line is crossed. Neither ever trades." />
+      <PageHero art="/art/ravens.jpg" icon="/art/ravens.webp" kicker="Huginn &amp; Muninn" title="Signals & alerts" text="Huginn thinks: AI signals on your schedule. Muninn remembers: rule alerts the moment a line is crossed. Neither ever trades." />
       <p className="muted">Information only — alerts and signals never place trades.</p>
       {msg && <p className={msg.ok ? 'ok' : 'error'}>{msg.text}</p>}
       <h2>Rule alerts</h2>

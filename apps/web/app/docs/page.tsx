@@ -24,7 +24,7 @@ export default function Docs() {
   const areas = [...new Set(codes.map((c) => c.area))];
   return (
     <>
-      <PageHero art="/art/knot.jpg" kicker="The lore, made practical" title="How Odin Robinhood works" text="Everything you need to carve a strategy, protect it and read why anything was refused." />
+      <PageHero art="/art/knot.jpg" icon="/art/valkyrie.webp" kicker="The lore, made practical" title="How Odin Robinhood works" text="Everything you need to carve a strategy, protect it and read why anything was refused." />
       <div className="panel">
         <ol style={{ margin: 0, paddingLeft: 20 }}>
           {SECTIONS.map(([id, t]) => <li key={id}><a href={`#${id}`}>{t}</a></li>)}

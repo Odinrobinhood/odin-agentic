@@ -139,7 +139,7 @@ export function Ticker() {
 }
 
 /** Page header: grayscale lore art behind a title (warms to color on hover), with a slow zoom. */
-export function PageHero({ art, kicker, title, text, children }: { art: string; kicker: string; title: string; text?: string; children?: ReactNode }) {
+export function PageHero({ art, icon, kicker, title, text, children }: { art: string; icon?: string; kicker: string; title: string; text?: string; children?: ReactNode }) {
   return (
     <section className="hero-banner" style={{ minHeight: 220 }}>
       <img className="zoomin" src={art} alt="" aria-hidden="true" />
@@ -150,6 +150,7 @@ export function PageHero({ art, kicker, title, text, children }: { art: string; 
           {text && <p style={{ margin: 0, color: 'var(--soft)' }}>{text}</p>}
         </div>
         {children}
+        {icon && <img className="hero-icon" src={icon} alt="" aria-hidden="true" />}
       </div>
     </section>
   );

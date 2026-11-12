@@ -374,7 +374,11 @@ function RiskTpSl({ id, agent, reload }: { id: string; agent: Any; reload: () =>
   const rf = (k: keyof typeof risk) => <input value={risk[k] as string} onChange={(e) => setRisk({ ...risk, [k]: e.target.value })} placeholder="off" />;
   return (
     <>
-      <h2>Take profit / stop loss (default for new positions)</h2>
+      <div className="row" style={{ gap: 14, marginTop: 34 }}>
+        <img className="lore-icon" src="/art/take-profit.webp" alt="" aria-hidden="true" />
+        <img className="lore-icon" src="/art/stop-loss.webp" alt="" aria-hidden="true" />
+        <h2 style={{ margin: 0 }}>Take profit / stop loss (default for new positions)</h2>
+      </div>
       <div className="panel">
         <div className="grid">
           <div><label>Stop loss</label><div className="row"><select value={tp.slMode} onChange={(e) => setTp({ ...tp, slMode: e.target.value })} style={{ width: 90 }}><option value="pct">% below</option><option value="price">price</option></select><input value={tp.sl} onChange={(e) => setTp({ ...tp, sl: e.target.value })} placeholder="off" style={{ flex: 1 }} /></div></div>
@@ -569,7 +573,10 @@ function Funds({ id, agent }: { id: string; agent: Any }) {
   return (
     <>
       <div className="panel">
-        <h2 style={{ marginTop: 0 }}>Deposit</h2>
+        <div className="row" style={{ gap: 14, marginBottom: 8 }}>
+          <img className="lore-icon" src="/art/wallet.webp" alt="" aria-hidden="true" />
+          <h2 style={{ margin: 0 }}>Deposit</h2>
+        </div>
         <p>Send funds on <b>Robinhood Chain</b> to the agent wallet:</p>
         <p className="mono">{agent.wallet}</p>
         <p className="muted">Deposit trading capital in the agent&apos;s base asset (USDG, or WETH for an ETH agent) plus a little native ETH for gas. Native ETH is used for gas only.</p>

@@ -18,7 +18,10 @@ export default function Analyst() {
   useEffect(() => {
     if (cid) call('GET', `/analyst/conversations/${cid}`).then(setMsgs).catch(() => {});
   }, [cid]);
-  useEffect(() => end.current?.scrollIntoView({ behavior: 'smooth' }), [msgs]);
+  // Block body on purpose: newer browsers return a Promise from scrollIntoView, which React would call as cleanup.
+  useEffect(() => {
+    end.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [msgs]);
   const ask = async () => {
     setErr(null);
     setBusy(true);
@@ -49,7 +52,10 @@ export default function Analyst() {
         ))}
       </div>
       <div style={{ flex: 1 }}>
-        <h1>Market analyst</h1>
+        <div className="row" style={{ gap: 16, marginBottom: 6 }}>
+          <img className="lore-icon" src="/art/ravens.webp" alt="" aria-hidden="true" />
+          <h1 style={{ margin: 0 }}>Market analyst</h1>
+        </div>
         <p className="muted">Ask about any token on Robinhood Chain (Stock Tokens included). Answers come only from on-chain data and cite their source; this is not financial advice.</p>
         <div className="panel chat">
           {msgs.map((m, i) => (

@@ -24,12 +24,12 @@ const STEPS = [
 ];
 
 const POWERS = [
-  { art: '/art/shield.jpg', name: 'Einherjar', what: 'Trading agents', status: 'available', text: 'Own wallet, your schedule or a price trigger, every decision written down with its thesis.' },
-  { art: '/art/eye.jpg', name: 'Mímir', what: 'Market analyst', status: 'available', text: 'Answers from on-chain tools only; every number cites its source and block.' },
-  { art: '/art/ravens.jpg', name: 'Huginn & Muninn', what: 'Signals & alerts', status: 'available', text: 'AI signals on your schedule and rule alerts the moment a line is crossed.' },
-  { art: '/art/seat.jpg', name: 'Hliðskjálf', what: 'Portfolio', status: 'available', text: 'Your wallet, your agents and watched addresses at their realizable value.' },
-  { art: '/art/knot.jpg', name: 'The Norns', what: 'Backtests', status: 'beta', text: 'Replay a strategy version over recorded prices before it touches money.' },
-  { art: '/art/gungnir.jpg', name: 'Gungnir', what: 'Live trading', status: 'in testing', text: 'The isolated signer is built and reviewed internally; live funds come after a small-funds mainnet trial.' },
+  { icon: '/art/medal.webp', name: 'Einherjar', what: 'Trading agents', status: 'available', text: 'Own wallet, your schedule or a price trigger, every decision written down with its thesis.' },
+  { icon: '/art/valkyrie.webp', name: 'Valkyries', what: 'Take-profit & stop-loss', status: 'available', text: 'A separate guard prices every position every few seconds. Only you can move the lines — never the AI.' },
+  { icon: '/art/ravens.webp', name: 'Huginn & Muninn', what: 'Analyst & signals', status: 'available', text: 'Answers from on-chain tools with cited sources; AI signals and rule alerts on your schedule.' },
+  { icon: '/art/seat.webp', name: 'Hliðskjálf', what: 'Portfolio', status: 'available', text: 'Your wallet, your agents and watched addresses at their realizable value.' },
+  { icon: '/art/wallet.webp', name: 'The hoard', what: 'Your funds', status: 'available', text: 'Withdrawals go only to the wallet you signed in with. Export the agent key any time.' },
+  { icon: '/art/gungnir.webp', name: 'Gungnir', what: 'Live trading', status: 'in testing', text: 'The isolated signer is built and reviewed internally; live funds come after a small-funds mainnet trial.' },
 ];
 
 const ROADMAP = [
@@ -75,12 +75,20 @@ export default function Landing() {
 
   return (
     <div>
-      {/* ── 00 hero ── */}
-      <section style={{ maxWidth: 1240, margin: '0 auto', padding: '72px 28px 64px' }}>
-        <div className="row" style={{ gap: 48, alignItems: 'stretch' }}>
-          <div className="stagger" style={{ flex: '1 1 560px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 26, justifyContent: 'center' }}>
-            <span className="kicker"><b>00</b> / Odin Robinhood · AI agents on Robinhood Chain</span>
-            <h1 className="display" style={{ margin: 0, fontSize: 'clamp(52px, 7.6vw, 108px)' }}>
+      {/* ── 00 hero: full-bleed film of Odin and Yggdrasil ── */}
+      <section className="hero-film">
+        <video className="film" autoPlay muted loop playsInline preload="auto" poster="/media/hero-poster.jpg" aria-hidden="true">
+          <source src="/media/hero.webm" type="video/webm" />
+          <source src="/media/hero.mp4" type="video/mp4" />
+        </video>
+        <img className="film still" src="/media/hero-still.jpg" alt="" aria-hidden="true" />
+        <div className="inner">
+          <div className="stagger" style={{ maxWidth: 620, display: 'flex', flexDirection: 'column', gap: 24 }}>
+            <span className="row" style={{ gap: 12 }}>
+              <img src="/art/medal.webp" alt="" aria-hidden="true" className="medal" />
+              <span className="kicker"><b>00</b> / Odin Robinhood · AI agents on Robinhood Chain</span>
+            </span>
+            <h1 className="display" style={{ margin: 0, fontSize: 'clamp(50px, 7.4vw, 108px)' }}>
               Trade with<br />rules,<br /><span style={{ color: 'var(--rune)' }}>not hope.</span>
             </h1>
             <p style={{ margin: 0, fontSize: 19, color: 'var(--soft)', maxWidth: 520 }}>
@@ -91,33 +99,14 @@ export default function Landing() {
               <a href="#how" className="btn-link">See how it works</a>
             </div>
             {err && <p className="error" style={{ margin: 0 }}>{err}</p>}
-            <div className="row" style={{ gap: 8 }}>
-              {['Robinhood Chain', 'USDG', 'WETH', 'Stock Tokens', 'Paper first'].map((c) => <span key={c} className="chip">{c}</span>)}
+            <div className="readout">
+              <span className="kicker">readout / {lead ? lead.symbol.toLowerCase() : 'market'}</span>
+              <strong className="num">{lead ? lead.price.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '—'}</strong>
+              <span className="mono muted" style={{ fontSize: 12 }}>USDG</span>
+              {lead && lead.changePct !== null && <span className="num" style={{ color: lead.changePct >= 0 ? 'var(--rune)' : 'var(--ember)', fontSize: 13 }}>{lead.changePct >= 0 ? '+' : '−'}{Math.abs(lead.changePct).toFixed(2)}% · 24h</span>}
+              <span className="row mono" style={{ gap: 8, fontSize: 12, color: 'var(--rune)', marginLeft: 'auto' }}><span className="live-dot" />agents online</span>
             </div>
           </div>
-          <Reveal delay={120}>
-            <div style={{ width: 'min(460px, 88vw)', display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div className="card lift" style={{ padding: 0, overflow: 'hidden' }}>
-                <div style={{ overflow: 'hidden' }}>
-                  <img className="art" src="/art/mascot.jpg" alt="Odin in a feathered hat with a cyber raven" style={{ display: 'block', width: '100%', aspectRatio: '1 / 1', objectFit: 'cover' }} />
-                </div>
-                <div className="row" style={{ justifyContent: 'space-between', padding: '12px 16px', borderTop: '1px solid var(--line)' }}>
-                  <span className="kicker">emblem / odin</span>
-                  <span className="row mono" style={{ gap: 8, fontSize: 12, color: 'var(--rune)' }}><span className="live-dot" />agents online</span>
-                </div>
-              </div>
-              <div className="card" style={{ padding: '14px 16px' }}>
-                <div className="row" style={{ justifyContent: 'space-between' }}>
-                  <span className="kicker">readout / {lead ? lead.symbol.toLowerCase() : 'market'}</span>
-                  <span className="mono muted" style={{ fontSize: 12 }}>USDG · pool mid</span>
-                </div>
-                <div className="row" style={{ justifyContent: 'space-between', alignItems: 'baseline', marginTop: 6 }}>
-                  <strong className="num" style={{ fontSize: 30, color: 'var(--ink)', fontWeight: 400 }}>{lead ? lead.price.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '—'}</strong>
-                  {lead && lead.changePct !== null && <span className="num" style={{ color: lead.changePct >= 0 ? 'var(--rune)' : 'var(--ember)' }}>{lead.changePct >= 0 ? '+' : '−'}{Math.abs(lead.changePct).toFixed(2)}% · 24h</span>}
-                </div>
-              </div>
-            </div>
-          </Reveal>
         </div>
       </section>
 
@@ -186,6 +175,27 @@ export default function Landing() {
         </Reveal>
       </section>
 
+      {/* ── 03b the guard ── */}
+      <section style={{ maxWidth: 1240, margin: '0 auto', padding: '0 28px 96px' }}>
+        <div className="guard-duo">
+          {[
+            ['/art/take-profit.webp', 'Take profit', 'tp', 'Sell when the realizable price rises past your line — percent above entry or a fixed price.'],
+            ['/art/stop-loss.webp', 'Stop loss', 'sl', 'Sell when it falls through your floor. Checked every 3 seconds, even while the agent sleeps.'],
+          ].map(([src, t, k, d], i) => (
+            <Reveal key={k} delay={i * 100}>
+              <div className={`card guard-card ${k}`}>
+                <img src={src} alt="" aria-hidden="true" />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <span className="kicker">valkyrie / {k}</span>
+                  <strong style={{ fontSize: 24, color: 'var(--ink)', fontWeight: 600, letterSpacing: '-0.02em' }}>{t}</strong>
+                  <span className="muted" style={{ fontSize: 14.5 }}>{d}</span>
+                </div>
+              </div>
+            </Reveal>
+          ))}
+        </div>
+      </section>
+
       {/* ── 04 foundation ── */}
       <section style={{ borderTop: '1px solid var(--line)' }}>
         <div style={{ maxWidth: 1240, margin: '0 auto', padding: '96px 28px' }}>
@@ -199,8 +209,8 @@ export default function Landing() {
             {POWERS.map((p, i) => (
               <Reveal key={p.name} delay={(i % 3) * 80}>
                 <article className="card lift" style={{ padding: 0, overflow: 'hidden', height: '100%' }}>
-                  <div style={{ overflow: 'hidden', borderBottom: '1px solid var(--line)' }}>
-                    <img className="art" src={p.art} alt="" aria-hidden="true" style={{ display: 'block', width: '100%', aspectRatio: '16 / 8', objectFit: 'cover' }} />
+                  <div className="stage">
+                    <img className="icon-art" src={p.icon} alt="" aria-hidden="true" />
                   </div>
                   <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 10 }}>
                     <div className="row" style={{ justifyContent: 'space-between' }}>
@@ -274,6 +284,7 @@ export default function Landing() {
       <section style={{ borderTop: '1px solid var(--line)', background: 'var(--surface)' }}>
         <Reveal>
           <div style={{ maxWidth: 1240, margin: '0 auto', padding: '96px 28px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 22 }}>
+            <img src="/art/medal.webp" alt="" aria-hidden="true" className="medal-big" />
             <span className="kicker">the seat is open</span>
             <h2 className="display" style={{ margin: 0, fontSize: 'clamp(42px, 6.4vw, 92px)' }}>See everything.<br /><span style={{ color: 'var(--rune)' }}>Decide with discipline.</span></h2>
             <div className="row" style={{ gap: 12, justifyContent: 'center' }}>

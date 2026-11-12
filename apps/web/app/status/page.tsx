@@ -26,7 +26,7 @@ export default function StatusPage() {
   }, []);
   return (
     <>
-      <PageHero art="/art/yggdrasil.jpg" kicker="Yggdrasil" title="System status" text="Take-profit and stop-loss run on their own service and keep guarding even if the AI is down." />
+      <PageHero art="/art/yggdrasil.jpg" icon="/art/gungnir.webp" kicker="Yggdrasil" title="System status" text="Take-profit and stop-loss run on their own service and keep guarding even if the AI is down." />
       {err && <p className="error">{err}</p>}
       {s && (
         <>

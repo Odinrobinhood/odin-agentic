@@ -39,7 +39,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
     <div className="shell">
       <aside className="sidebar" aria-label="Sidebar">
         <Link href="/" className="brand" aria-label="Odin Robinhood home">
-          <img src="/art/mascot.jpg" alt="" />
+          <img src="/art/medal.webp" alt="" />
           <span>ODIN<br /><b>ROBINHOOD</b></span>
         </Link>
         {GROUPS.map((g) => (
