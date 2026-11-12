@@ -12,7 +12,7 @@ type State =
   | { kind: 'closed' }
   | { kind: 'finding' }
   | { kind: 'pick'; wallets: WalletInfo[] }
-  | { kind: 'working'; wallet: WalletInfo; step: SignInStep; slow: boolean }
+  | { kind: 'working'; wallet: WalletInfo; step: SignInStep; slow: boolean; pending?: boolean; wallets: WalletInfo[] }
   | { kind: 'error'; wallet?: WalletInfo; text: string; wallets: WalletInfo[] }
   | { kind: 'none' };
 
@@ -25,25 +25,36 @@ const isPhone = () => /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 export default function ConnectDialog({ onSignedIn }: { onSignedIn: () => void }) {
   const [s, setS] = useState<State>({ kind: 'closed' });
   const slowTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const attempt = useRef(0); // a newer attempt (e.g. 'use another wallet') makes older wallet promises stale
 
   const run = useCallback(
     async (w: WalletInfo, all: WalletInfo[]) => {
       chooseWallet(w);
+      const me = ++attempt.current;
+      const live = () => attempt.current === me;
       let at: SignInStep = 'connect';
       const set = (step: SignInStep) => {
         at = step;
         if (slowTimer.current) clearTimeout(slowTimer.current);
-        setS({ kind: 'working', wallet: w, step, slow: false });
+        if (!live()) return;
+        setS({ kind: 'working', wallet: w, step, slow: false, wallets: all });
         if (step !== 'verify') slowTimer.current = setTimeout(() => (reportConnect({ result: 'slow', step, wallet: w.name }), setS((x) => (x.kind === 'working' && x.step === step ? { ...x, slow: true } : x))), 12_000);
       };
       try {
-        await signIn(set);
+        await signIn(set, () => {
+          if (!live()) return;
+          if (slowTimer.current) clearTimeout(slowTimer.current);
+          reportConnect({ result: 'pending', wallet: w.name });
+          setS({ kind: 'working', wallet: w, step: 'connect', slow: false, pending: true, wallets: all });
+        });
+        if (!live()) return;
         if (slowTimer.current) clearTimeout(slowTimer.current);
         reportConnect({ result: 'ok', wallet: w.name, wallets: all.length });
         setS({ kind: 'closed' });
         onSignedIn();
       } catch (e) {
         if (slowTimer.current) clearTimeout(slowTimer.current);
+        if (!live()) return;
         const x = e as { code?: unknown; message?: unknown };
         reportConnect({ result: 'error', step: at, wallet: w.name, wallets: all.length, code: x?.code ?? null, message: String(x?.message ?? e).slice(0, 200) });
         setS({ kind: 'error', wallet: w, text: walletErrorText(e, w.name), wallets: all });
@@ -60,7 +71,7 @@ export default function ConnectDialog({ onSignedIn }: { onSignedIn: () => void }
     if (all.length === 0) return setS({ kind: 'none' });
     const remembered = all.find((w) => w.id === rememberedWalletId());
     if (all.length === 1) return run(all[0]!, all);
-    if (remembered && all.length > 1) return setS({ kind: 'pick', wallets: [remembered, ...all.filter((w) => w !== remembered)] });
+    if (remembered) return run(remembered, all); // last-used wallet: no picker; 'Use another wallet' is one click away
     setS({ kind: 'pick', wallets: all });
   }, [run]);
 
@@ -121,10 +132,18 @@ export default function ConnectDialog({ onSignedIn }: { onSignedIn: () => void }
                 );
               })}
             </ol>
-            {s.slow && (
+            {s.pending && (
+              <p className="warnbox" style={{ marginBottom: 0 }}>
+                <b>{s.wallet.name} already has a connection request open.</b> Click the {s.wallet.name} icon in your browser toolbar (top right; it may sit under the puzzle-piece menu) and press <b>Connect</b>. Sign-in continues here automatically.
+              </p>
+            )}
+            {s.slow && !s.pending && (
               <p className="warnbox" style={{ marginBottom: 0 }}>
                 Nothing showed up? Click the {s.wallet.name} icon in your browser toolbar — the request may be waiting there. If it is locked, unlock it first.
               </p>
+            )}
+            {s.wallets.length > 1 && (
+              <button className="quiet" style={{ marginTop: 10 }} onClick={() => (attempt.current++, setS({ kind: 'pick', wallets: s.wallets }))}>Use another wallet</button>
             )}
           </>
         )}

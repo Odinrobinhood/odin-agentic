@@ -42,9 +42,17 @@ async function newPage(viewport) {
   await page.addInitScript(() => {
     const good = { isMetaMask: true, request: ({ method, params }) => window.__odinWallet(method, params ?? []), on() {}, removeListener() {} };
     const bad = { request: async () => { throw Object.assign(new Error('User rejected the request.'), { code: 4001 }); }, on() {}, removeListener() {} };
+    // "Busy Wallet" behaves like MetaMask with an old connection popup still open: eth_requestAccounts fails with
+    // -32002 and the site only gets the account once the user approves that old request (here: after 4 s).
+    let approvedAt = 0;
+    const busy = { request: async ({ method, params }) => {
+      if (method === 'eth_accounts') return approvedAt && Date.now() > approvedAt ? window.__odinWallet('eth_accounts', []) : [];
+      if (method === 'eth_requestAccounts') { approvedAt ||= Date.now() + 4000; throw Object.assign(new Error("Request of type 'wallet_requestPermissions' already pending for origin. Please wait."), { code: -32002 }); }
+      return window.__odinWallet(method, params ?? []);
+    }, on() {}, removeListener() {} };
     window.ethereum = good;
     const announce = () => {
-      for (const [provider, name, rdns] of [[bad, 'Grumpy Wallet', 'test.grumpy'], [good, 'Test Wallet', 'test.good']]) {
+      for (const [provider, name, rdns] of [[bad, 'Grumpy Wallet', 'test.grumpy'], [good, 'Test Wallet', 'test.good'], [busy, 'Busy Wallet', 'test.busy']]) {
         window.dispatchEvent(new CustomEvent('eip6963:announceProvider', { detail: Object.freeze({ info: { uuid: rdns, name, rdns, icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg"/>' }, provider }) }));
       }
     };
@@ -176,6 +184,15 @@ await step('mobile: landing and agents', async () => {
   await phone.goto(`${BASE}/docs`, { waitUntil: 'networkidle' });
   await phone.waitForTimeout(800);
   await shot(phone, '21-mobile-docs', false);
+});
+
+await step('connect: a wallet with a stuck request continues by itself once approved (-32002)', async () => {
+  await phone.goto(BASE, { waitUntil: 'networkidle' });
+  await phone.getByRole('button', { name: 'Connect', exact: true }).click();
+  await phone.getByRole('button', { name: 'Busy Wallet' }).click();
+  await phone.getByText('already has a connection request open').waitFor({ timeout: 10_000 });
+  await shot(phone, '22-mobile-connect-pending', false);
+  await phone.waitForURL('**/agents', { timeout: 30_000 });
 });
 
 await step('cleanup: retire the test agent', async () => {

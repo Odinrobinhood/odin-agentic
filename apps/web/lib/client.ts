@@ -122,11 +122,31 @@ export async function ensureRobinhoodChain(): Promise<boolean> {
   }
 }
 
-export async function connectedAddress(): Promise<Address> {
+/**
+ * The wallet's selected account, asking for permission only when the site is not connected yet. If the wallet still
+ * has an older connection request open (-32002, e.g. a popup that was closed), do not fail: wait until the user
+ * approves it from the wallet icon, then continue on our own.
+ */
+export async function connectedAddress(onPending?: () => void): Promise<Address> {
   const { provider } = await wallet();
-  const [a] = (await provider.request({ method: 'eth_requestAccounts' })) as string[];
-  if (!a) throw new Error('No account selected in the wallet');
-  return getAddress(a);
+  const accounts = async () => ((await provider.request({ method: 'eth_accounts' }).catch(() => [])) as string[]) ?? [];
+  const already = (await accounts())[0];
+  if (already) return getAddress(already);
+  try {
+    const [a] = (await provider.request({ method: 'eth_requestAccounts' })) as string[];
+    if (!a) throw new Error('No account selected in the wallet');
+    return getAddress(a);
+  } catch (e) {
+    if ((e as { code?: number }).code !== -32002) throw e;
+    onPending?.();
+    const until = Date.now() + 5 * 60_000;
+    while (Date.now() < until) {
+      await new Promise((r) => setTimeout(r, 1000));
+      const a = (await accounts())[0];
+      if (a) return getAddress(a);
+    }
+    throw e;
+  }
 }
 
 /** personal_sign with the user's wallet (used for SIWE and key export). Hex-encoded: the most compatible form. */
@@ -138,9 +158,9 @@ export async function signText(address: Address, text: string): Promise<`0x${str
 export type SignInStep = 'connect' | 'sign' | 'verify';
 
 /** Sign-In With Ethereum. Also used as step-up before withdraw / export / going live. */
-export async function signIn(onStep?: (s: SignInStep) => void): Promise<Address> {
+export async function signIn(onStep?: (s: SignInStep) => void, onPending?: () => void): Promise<Address> {
   onStep?.('connect');
-  const address = await connectedAddress();
+  const address = await connectedAddress(onPending);
   // No network switch here: a chain prompt that never shows (seen on Firefox) must not block signing in.
   // ensureRobinhoodChain() is offered from the Deposit panel instead.
   const nr = await fetch('/api/auth/nonce', { method: 'POST', headers: { 'x-odin': '1' } });
