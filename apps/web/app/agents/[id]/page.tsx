@@ -381,8 +381,8 @@ function RiskTpSl({ id, agent, reload }: { id: string; agent: Any; reload: () =>
       </div>
       <div className="panel">
         <div className="grid">
-          <div><label>Stop loss</label><div className="row"><select value={tp.slMode} onChange={(e) => setTp({ ...tp, slMode: e.target.value })} style={{ width: 90 }}><option value="pct">% below</option><option value="price">price</option></select><input value={tp.sl} onChange={(e) => setTp({ ...tp, sl: e.target.value })} placeholder="off" style={{ flex: 1 }} /></div></div>
-          <div><label>Take profit</label><div className="row"><select value={tp.tpMode} onChange={(e) => setTp({ ...tp, tpMode: e.target.value })} style={{ width: 90 }}><option value="pct">% above</option><option value="price">price</option></select><input value={tp.tp} onChange={(e) => setTp({ ...tp, tp: e.target.value })} placeholder="off" style={{ flex: 1 }} /></div></div>
+          <div><label>Stop loss</label><div className="row"><select value={tp.slMode} onChange={(e) => setTp({ ...tp, slMode: e.target.value })} style={{ width: 130, flex: 'none' }}><option value="pct">% below</option><option value="price">price</option></select><input value={tp.sl} onChange={(e) => setTp({ ...tp, sl: e.target.value })} placeholder="off" style={{ flex: 1 }} /></div></div>
+          <div><label>Take profit</label><div className="row"><select value={tp.tpMode} onChange={(e) => setTp({ ...tp, tpMode: e.target.value })} style={{ width: 130, flex: 'none' }}><option value="pct">% above</option><option value="price">price</option></select><input value={tp.tp} onChange={(e) => setTp({ ...tp, tp: e.target.value })} placeholder="off" style={{ flex: 1 }} /></div></div>
           <div><label>Sell anyway after price deviation for (s, 0 = immediately)</label><input type="number" value={tp.dev} onChange={(e) => setTp({ ...tp, dev: e.target.value })} /></div>
         </div>
         <p className="muted">The AI cannot change these. They keep running while the agent is paused.</p>
