@@ -64,7 +64,14 @@ export async function runTick(deps: TickDeps, agentId: string, opts: { wake?: Re
       balances: Object.fromEntries([...balances].map(([t, v]) => [t, formatUnits(v, dec.get(t) ?? 18)])),
       positions: positions
         .filter((p) => p.token !== agent.quote.address)
-        .map((p) => ({ token: p.token, qty: formatUnits(p.qty, dec.get(p.token) ?? 18), avg_entry_price_quote: p.avgEntryPrice })),
+        .map((p) => ({
+          token: p.token,
+          qty: formatUnits(p.qty, dec.get(p.token) ?? 18),
+          avg_entry_price_quote: p.avgEntryPrice,
+          // authoritative holding time: the model must not infer it from recent_decisions
+          opened_at: p.openedAt ? p.openedAt.toISOString() : null,
+          held_minutes: p.openedAt ? Math.floor((Date.now() - p.openedAt.getTime()) / 60_000) : null,
+        })),
       recent_decisions: history,
       // set when a price trigger pulled this tick forward (architecture §3.5)
       ...(opts.wake ? { woken_by_trigger: opts.wake } : {}),

@@ -45,7 +45,7 @@ export type MarketState = {
   candles: Map<Address, { t: string; o: number; h: number; l: number; c: number }[]>;
 };
 
-export type PositionRow = { token: Address; qty: bigint; avgEntryPrice: number };
+export type PositionRow = { token: Address; qty: bigint; avgEntryPrice: number; /** when the position was opened; null = unknown */ openedAt?: Date | null };
 
 export type DecisionRow = {
   agentId: string;

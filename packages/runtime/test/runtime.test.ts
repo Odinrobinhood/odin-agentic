@@ -5,7 +5,7 @@ import type { SwapJob, SwapOutcome } from '@odin/executor';
 import type { RiskIntent, RiskResult } from '@odin/risk';
 import { guardTriggers, nextPosition } from '../src/positions.ts';
 import { runTick, type TickDeps } from '../src/tick.ts';
-import type { AgentRuntimeState, DecisionRow, Fill, RuntimeStore } from '../src/types.ts';
+import type { AgentRuntimeState, DecisionRow, Fill, PositionRow, RuntimeStore } from '../src/types.ts';
 
 const addr = (n: number): Address => getAddress(`0x${n.toString(16).padStart(40, '0')}`);
 const USDG = addr(0x2001);
@@ -49,7 +49,7 @@ class FakeStore implements RuntimeStore {
   async market() {
     return { snapshotId: 42, snapshotTs: new Date(), pricesUsdg: new Map([[TSLA, 385]]), candles: new Map() };
   }
-  async positions() {
+  async positions(): Promise<PositionRow[]> {
     return [];
   }
   async recentDecisions() {
@@ -154,6 +154,14 @@ describe('runTick', () => {
     expect(await runTick(deps, 'a1')).toMatchObject({ outcome: 'hold' });
     expect(seen.intent).toBeUndefined();
     expect(store.decisions.map((d) => d.action)).toEqual(['hold', 'hold']);
+  });
+
+  it('gives the model each position\'s opened_at and held_minutes (holding-time rules must not be guessed)', async () => {
+    const opened = new Date(Date.now() - 25 * 60_000 - 5_000);
+    store.positions = async () => [{ token: TSLA, qty: 10n ** 18n, avgEntryPrice: 380, openedAt: opened }];
+    decideResult = { ...buy, decision: { ...(buy as { decision: object }).decision, action: 'hold', token: null, size: null } } as DecideResult;
+    await runTick(deps, 'a1');
+    expect(seen.ctx!.data).toMatchObject({ positions: [{ token: TSLA, opened_at: opened.toISOString(), held_minutes: 25 }] });
   });
 
   it('passes the trigger that woke the tick to the model', async () => {

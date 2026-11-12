@@ -95,11 +95,11 @@ export class PgRuntimeStore implements RuntimeStore {
   }
 
   async positions(agentId: string, mode: Mode): Promise<PositionRow[]> {
-    const r = await this.pool.query<{ token_address: string; qty: string; avg_entry_price: string }>(
-      `SELECT token_address, qty, avg_entry_price FROM positions WHERE agent_id = $1 AND mode = $2 AND qty > 0`,
+    const r = await this.pool.query<{ token_address: string; qty: string; avg_entry_price: string; opened_at: Date | null }>(
+      `SELECT token_address, qty, avg_entry_price, opened_at FROM positions WHERE agent_id = $1 AND mode = $2 AND qty > 0`,
       [agentId, mode],
     );
-    return r.rows.map((x) => ({ token: getAddress(x.token_address), qty: BigInt(x.qty), avgEntryPrice: Number(x.avg_entry_price) }));
+    return r.rows.map((x) => ({ token: getAddress(x.token_address), qty: BigInt(x.qty), avgEntryPrice: Number(x.avg_entry_price), openedAt: x.opened_at }));
   }
 
   async recentDecisions(agentId: string, n: number): Promise<unknown[]> {
@@ -149,8 +149,12 @@ export class PgRuntimeStore implements RuntimeStore {
       const old = cur.rows[0] ? { qty: BigInt(cur.rows[0].qty), avgEntryPrice: Number(cur.rows[0].avg_entry_price) } : null;
       const next = nextPosition(old, fill, quote, decimals);
       const pos = await client.query<{ id: string }>(
-        `INSERT INTO positions (agent_id, token_address, mode, qty, avg_entry_price) VALUES ($1, $2, $3, $4, $5)
-         ON CONFLICT (agent_id, token_address, mode) DO UPDATE SET qty = EXCLUDED.qty, avg_entry_price = EXCLUDED.avg_entry_price
+        `INSERT INTO positions (agent_id, token_address, mode, qty, avg_entry_price, opened_at)
+         VALUES ($1, $2, $3, $4, $5, CASE WHEN $4::numeric > 0 THEN now() END)
+         ON CONFLICT (agent_id, token_address, mode) DO UPDATE SET qty = EXCLUDED.qty, avg_entry_price = EXCLUDED.avg_entry_price,
+           opened_at = CASE WHEN EXCLUDED.qty <= 0 THEN NULL
+                            WHEN positions.qty <= 0 OR positions.opened_at IS NULL THEN now()
+                            ELSE positions.opened_at END
          RETURNING id`,
         [agent.agentId, lc(token), agent.mode, next.qty.toString(), next.avgEntryPrice],
       );
