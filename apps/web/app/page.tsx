@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { call, openConnect } from '@/lib/client';
+import { XLink } from './social';
 import { Reveal, Ticker, TypeConsole, usePrices, type ConsoleLine } from './motion';
 
 const CONSOLE: ConsoleLine[] = [
@@ -301,6 +302,10 @@ export default function Landing() {
               {(links as string[][]).map(([href, label]) => <Link key={href} href={href!} className="muted" style={{ fontSize: 14 }}>{label}</Link>)}
             </div>
           ))}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <span className="kicker">Community</span>
+            <XLink label />
+          </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <span className="kicker">Network</span>
             <span className="muted mono" style={{ fontSize: 13 }}>Robinhood Chain · 4663</span>

@@ -339,3 +339,15 @@ details.faq p { margin: 0 0 22px 46px; color: var(--soft); max-width: 760px; ani
   .analyst-convs > * { flex: none; margin-top: 0 !important; white-space: nowrap; align-self: center; }
   .settle-arrow { display: none; }
 }
+
+/* X (Twitter) link */
+.x-link { display: inline-flex; align-items: center; gap: 8px; color: var(--soft); font-size: 14px; }
+.x-link svg { width: 15px; height: 15px; flex: none; }
+.x-link:hover { color: var(--ink); }
+.top-x { justify-content: center; width: 36px; height: 36px; border: 1px solid var(--line-strong); border-radius: 4px; background: var(--surface); flex: none; }
+.top-x:hover { border-color: #8a8a8a; }
+.sidebar .foot .x-link { font-size: 12.5px; color: var(--muted); }
+.sidebar .foot .x-link:hover { color: var(--ink); }
+.more-sheet nav a.sheet-x { gap: 12px; color: var(--ink); }
+.more-sheet nav a.sheet-x svg { width: 17px; height: 17px; }
+@media (max-width: 960px) { .top-x { display: none; } }

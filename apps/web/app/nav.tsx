@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { call, openConnect, short } from '@/lib/client';
 import ConnectDialog from './connect';
+import { XLink } from './social';
 
 const GROUPS: { title: string; links: [string, string][] }[] = [
   { title: 'Trade', links: [['/agents', 'Agents'], ['/alerts', 'Signals & alerts']] },
@@ -62,6 +63,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
         <div className="foot">
           <span className="row" style={{ gap: 8 }}><span className="live-dot" />Robinhood Chain · 4663</span>
           <span>See everything. Decide with discipline.</span>
+          <XLink label />
         </div>
       </aside>
       <div className="content">
@@ -69,6 +71,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           <Link href="/" className="m-brand" aria-label="Odin Robinhood home"><img src="/art/medal.webp" alt="" /></Link>
           <Link href="/" className="crumb" aria-label="Home">odin / <b>_{crumb}</b></Link>
           <span style={{ flex: 1 }} />
+          <XLink className="top-x" />
           <span className="chip mono net-chip" style={{ fontSize: 12 }}><span className="live-dot" /><span className="net-long">Robinhood Chain · </span>4663</span>
           {me ? (
             <div className="wallet on" ref={menuRef}>
@@ -100,6 +103,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
             {MORE.map(([href, label]) => (
               <Link key={href} href={href} className={on(href)} onClick={() => setMore(false)}>{label}</Link>
             ))}
+            <XLink label className="sheet-x" />
             <span className="row muted" style={{ gap: 8, fontSize: 12.5, padding: '10px 14px 2px' }}><span className="live-dot" />Robinhood Chain · 4663</span>
           </nav>
         </div>
