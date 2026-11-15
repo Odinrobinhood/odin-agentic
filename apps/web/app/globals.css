@@ -321,3 +321,21 @@ details.faq p { margin: 0 0 22px 46px; color: var(--soft); max-width: 760px; ani
   .more-sheet nav a.on { color: var(--rune); background: var(--surface-3); }
 }
 @media (max-width: 380px) { .net-chip { display: none; } }
+
+/* analyst layout: conversations beside the chat; stacked on phones */
+.analyst { display: flex; gap: 16px; align-items: flex-start; }
+.analyst-convs { width: 240px; flex: none; }
+.analyst-main { flex: 1; min-width: 0; }
+.addr { overflow-wrap: anywhere; word-break: break-all; }
+
+@media (max-width: 760px) {
+  /* wide data tables scroll inside their panel instead of widening the page */
+  main table { display: block; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  main th, main td { white-space: nowrap; }
+  .docs-toc { columns: 1; }
+  #wallet + .panel td, #costs + .panel td, #lifecycle + .panel td, #glossary + .panel td { white-space: normal; overflow-wrap: anywhere; }
+  .analyst { flex-direction: column; align-items: stretch; }
+  .analyst-convs { width: auto; display: flex; gap: 8px; overflow-x: auto; padding: 10px; margin-bottom: 4px; }
+  .analyst-convs > * { flex: none; margin-top: 0 !important; white-space: nowrap; align-self: center; }
+  .settle-arrow { display: none; }
+}

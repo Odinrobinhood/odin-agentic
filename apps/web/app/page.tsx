@@ -159,7 +159,7 @@ export default function Landing() {
                 <span className="kicker">{String(i + 1).padStart(2, '0')} · {k}</span>
                 <strong style={{ fontSize: 18, color: 'var(--ink)', fontWeight: 600 }}>{t}</strong>
                 <span className="muted" style={{ fontSize: 14 }}>{d}</span>
-                {i < all.length - 1 && <span aria-hidden="true" className="mono" style={{ position: 'absolute', right: -11, top: '50%', transform: 'translateY(-50%)', color: 'var(--rune)', zIndex: 1 }}>→</span>}
+                {i < all.length - 1 && <span aria-hidden="true" className="settle-arrow mono" style={{ position: 'absolute', right: -11, top: '50%', transform: 'translateY(-50%)', color: 'var(--rune)', zIndex: 1 }}>→</span>}
               </div>
             ))}
           </div>

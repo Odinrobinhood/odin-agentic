@@ -44,14 +44,14 @@ export default function Analyst() {
     }
   };
   return (
-    <div className="row" style={{ alignItems: 'flex-start' }}>
-      <div className="panel" style={{ width: 240 }}>
+    <div className="analyst">
+      <div className="panel analyst-convs">
         <button className="ghost" onClick={() => (setCid(null), setMsgs([]))}>New conversation</button>
         {convs.map((c) => (
           <div key={c.id} style={{ marginTop: 8 }}><a href="#" onClick={(e) => (e.preventDefault(), setCid(c.id))}>{c.title || 'Conversation'}</a></div>
         ))}
       </div>
-      <div style={{ flex: 1 }}>
+      <div className="analyst-main">
         <div className="row" style={{ gap: 16, marginBottom: 6 }}>
           <img className="lore-icon" src="/art/ravens.webp" alt="" aria-hidden="true" />
           <h1 style={{ margin: 0 }}>Market analyst</h1>

@@ -96,7 +96,7 @@ function Overview({ id, agent, reload }: { id: string; agent: Any; reload: () =>
   return (
     <>
       <div className="panel grid">
-        <div><label>Agent wallet (deposit address)</label><a className="mono" href={explorerAddress(agent.wallet)} target="_blank" rel="noreferrer">{agent.wallet}</a></div>
+        <div><label>Agent wallet (deposit address)</label><a className="mono addr" href={explorerAddress(agent.wallet)} target="_blank" rel="noreferrer">{agent.wallet}</a></div>
         <div><label>Quote asset</label>{agent.config ? <span className="mono">{short(agent.config.quote_asset)}</span> : <span className="muted">set a strategy first</span>}</div>
         <div><label>Config version</label>{agent.config?.version ?? '—'}</div>
       </div>
