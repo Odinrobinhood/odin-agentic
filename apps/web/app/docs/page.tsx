@@ -1,6 +1,7 @@
 'use client';
 import { PageHero } from '../motion';
 import { useEffect, useState } from 'react';
+import { XLink } from '../social';
 
 type Code = { code: string; area: string; text: string };
 
@@ -15,10 +16,18 @@ const SECTIONS = [
   ['costs', 'Fees and costs'],
   ['ai', 'AI usage and what the AI can and cannot do'],
   ['tools', 'Analyst, signals, alerts, portfolio, backtests'],
+  ['alerts', 'Signals and alerts in detail'],
+  ['triggers', 'Triggers'],
+  ['withdraw', 'Withdraw and export, step by step'],
+  ['account', 'Your account and sessions'],
+  ['limits', 'Limits at a glance'],
   ['safety', 'Safety model'],
+  ['privacy', 'Privacy and data'],
   ['trouble', 'Troubleshooting'],
   ['glossary', 'Glossary: the names in the lore'],
   ['roadmap', 'Roadmap'],
+  ['community', 'Community and support'],
+  ['risk-notice', 'Risk notice'],
   ['codes', 'Why was something rejected? (codes)'],
 ] as const;
 
@@ -172,6 +181,75 @@ for 24 hours. Never hold more than one position per token. Otherwise hold.`}
         <p><b>Backtests:</b> replay a strategy version over recorded prices at its cadence (up to 300 decisions). The model only sees data up to each moment; fills use the recorded price plus the pool fee, without price impact. Treat results as a sanity check, not a forecast.</p>
       </div>
 
+      <h2 id="alerts">Signals and alerts in detail</h2>
+      <div className="panel">
+        <p><b>Rule alerts</b> watch a condition and notify you in the app when it becomes true. Each alert has a cooldown so it does not repeat on every tick.</p>
+        <table>
+          <tbody>
+            <tr><td className="mono">price_above / price_below</td><td>A token&apos;s USDG price crosses your level.</td></tr>
+            <tr><td className="mono">change_pct</td><td>The price moves by at least your percentage within a window of 1 minute to 24 hours.</td></tr>
+            <tr><td className="mono">volume_above</td><td>Traded volume in a window of 1 minute to 24 hours exceeds your amount.</td></tr>
+            <tr><td className="mono">liquidity_below</td><td>A pool&apos;s liquidity falls under your threshold, a warning before a market gets thin.</td></tr>
+            <tr><td className="mono">large_transfer</td><td>A single transfer of a token is larger than your amount.</td></tr>
+            <tr><td className="mono">wallet_activity</td><td>A wallet you name sends or receives tokens.</td></tr>
+          </tbody>
+        </table>
+        <p style={{ marginTop: 14 }}><b>AI signal profiles</b> run a model on your schedule (every 5 minutes at the fastest) over up to 20 tokens and post a signal (direction, confidence and the reasoning) to your notifications. A profile has its own written mandate and model, is versioned like an agent strategy, and can be switched off at any time. Signals never trade.</p>
+      </div>
+
+      <h2 id="triggers">Triggers</h2>
+      <div className="panel">
+        <p>An agent thinks on its cadence. A trigger can wake it earlier when something happens: <span className="mono">price_above</span>, <span className="mono">price_below</span>, <span className="mono">change_pct</span> or <span className="mono">volume_above</span> on one of its tokens. Up to 10 triggers per agent.</p>
+        <p>Triggers fire on the <i>edge</i> (when the condition starts to hold, not on every tick while it holds) and at most once a minute. The agent is told which trigger woke it and the values that met it, so the mandate can react to it (&ldquo;if woken by a price drop, …&rdquo;). A trigger only starts a decision; it never trades on its own.</p>
+      </div>
+
+      <h2 id="withdraw">Withdraw and export, step by step</h2>
+      <div className="panel">
+        <p><b>Withdraw</b></p>
+        <ol>
+          <li>Open the agent, then <b>Funds</b>.</li>
+          <li>Pick the token (native ETH or a token address) and the amount.</li>
+          <li>Confirm. If your last wallet signature is older than 10 minutes, your wallet asks you to sign in again first.</li>
+          <li>The funds go to the wallet you signed in with, the only possible destination. The transaction appears in the withdrawal list with its explorer link.</li>
+        </ol>
+        <p>Up to 20 withdrawals per agent per day. Keep a little ETH in the agent wallet: withdrawals pay network gas too.</p>
+        <p style={{ marginTop: 16 }}><b>Export the private key</b></p>
+        <ol>
+          <li>Open the agent, then <b>Funds</b>, then <b>Export key</b>.</li>
+          <li>Sign the export message with the same wallet you signed in with. The signer checks this signature itself; nobody else can request your key.</li>
+          <li>The key is shown once. Import it into your own wallet app and store it safely. Anyone who has it controls the agent&apos;s funds.</li>
+        </ol>
+      </div>
+
+      <h2 id="account">Your account and sessions</h2>
+      <div className="panel">
+        <p>Your account is your wallet address. There is no password and no email.</p>
+        <ul>
+          <li><b>Sign-in</b> is a signed message (Sign-In With Ethereum) that names this site, Robinhood Chain and a one-time code. It is valid for 10 minutes and can be used only once.</li>
+          <li><b>Sessions</b> stay signed in for up to 30 days on a device and refresh themselves while you use the app.</li>
+          <li><b>Sensitive actions</b> (going live, withdrawing, exporting a key) need a wallet signature from the last 10 minutes; the app asks for it when needed.</li>
+          <li><b>Log out on all devices</b> (wallet menu, top right) ends every session of your wallet immediately.</li>
+        </ul>
+      </div>
+
+      <h2 id="limits">Limits at a glance</h2>
+      <div className="panel">
+        <table>
+          <tbody>
+            <tr><td className="muted">Agent cadence</td><td>at least 60 seconds</td></tr>
+            <tr><td className="muted">Tokens per agent</td><td>up to 50</td></tr>
+            <tr><td className="muted">Triggers per agent</td><td>up to 10, at most one fire per minute each</td></tr>
+            <tr><td className="muted">AI usage</td><td>2,000,000 tokens per user per day, shared by agents, analyst and signals; resets 00:00 UTC</td></tr>
+            <tr><td className="muted">AI signal profiles</td><td>up to 20 per user, every 5 minutes at the fastest, up to 20 tokens each</td></tr>
+            <tr><td className="muted">Backtests</td><td>up to 3 running per user, up to 300 decisions each, within recorded prices</td></tr>
+            <tr><td className="muted">Analyst</td><td>one question at a time</td></tr>
+            <tr><td className="muted">Slippage (technical cap)</td><td>50% against the signer&apos;s own quote; set your own lower limit on the Risk tab</td></tr>
+            <tr><td className="muted">Withdrawals</td><td>20 per agent per day, always to your sign-in wallet</td></tr>
+            <tr><td className="muted">Fresh signature</td><td>within 10 minutes for live mode, withdrawals and key export</td></tr>
+          </tbody>
+        </table>
+      </div>
+
       <h2 id="safety">Safety model</h2>
       <div className="panel">
         <ul>
@@ -182,6 +260,17 @@ for 24 hours. Never hold more than one position per token. Otherwise hold.`}
           <li>Every rejection has a code (below), shown wherever the action failed.</li>
         </ul>
         <p className="muted">Service health: see the <a href="/status">status page</a>.</p>
+      </div>
+
+      <h2 id="privacy">Privacy and data</h2>
+      <div className="panel">
+        <ul>
+          <li><b>What we store:</b> your wallet address, your agents and their settings, every decision with its rationale, trades, alerts and notifications, AI usage counts, and any wallets you add to the portfolio.</li>
+          <li><b>What we never have:</b> your own wallet&apos;s keys or seed phrase. Agent keys are derived inside the isolated signer and never leave it except through an export you sign.</li>
+          <li><b>AI providers</b> receive the market data, positions and mandate needed for one decision. Requests are sent with data collection denied, so providers that keep prompts for training are not used.</li>
+          <li><b>On-chain data is public.</b> Agent wallets and their trades are visible on the Robinhood Chain explorer, like any wallet.</li>
+          <li>Notifications stay in the app; nothing is sent by email, Telegram or push.</li>
+        </ul>
       </div>
 
       <h2 id="trouble">Troubleshooting</h2>
@@ -223,6 +312,19 @@ for 24 hours. Never hold more than one position per token. Otherwise hold.`}
             ))}
           </div>
         ))}
+      </div>
+
+      <h2 id="community">Community and support</h2>
+      <div className="panel">
+        <p>News, releases and announcements: <XLink label /></p>
+        <p>Service health: the <a href="/status">status page</a> shows every service and the freshness of prices and on-chain data.</p>
+        <p className="muted" style={{ marginBottom: 0 }}>We will never ask for your private key or seed phrase, in a message or anywhere else. Anyone who does is not us.</p>
+      </div>
+
+      <h2 id="risk-notice">Risk notice</h2>
+      <div className="panel">
+        <p>Odin Robinhood is software that executes the strategy <i>you</i> write. It does not give investment advice and does not promise returns. AI models make mistakes; markets move fast; on-chain tokens, including look-alikes, can lose all value; smart contracts and networks can fail.</p>
+        <p style={{ marginBottom: 0 }}>Only deposit what you can afford to lose, start in paper mode, keep take-profit and stop-loss set, and check your agents regularly. You are responsible for complying with the laws that apply to you.</p>
       </div>
 
       <h2 id="codes">Why was something rejected? (codes)</h2>
